@@ -15,8 +15,16 @@ import org.json.JSONObject
 import java.math.BigDecimal
 
 /**
- * Backward compatibility delegation wrapper around [BackupPayloadSerializer]
- * with helper parsers for master restoration.
+ * محول النسخ الاحتياطية ودعم التوافق مع الإصدارات السابقة (Backward Compatibility & Serialization Adapter)
+ *
+ * القواعد والحدود المعمارية الحاكمة:
+ * 1. قدسية خيارات المستخدم الصريحة (Explicit User Intent): إذا احتوت النسخة الاحتياطية على قيمة صريحة لحقل
+ *    (مثل initial_type للعميل)، يُمنع منعاً باتاً إعادة اشتقاقها أو استنتاجها من المعاملات؛ لأن ذلك يؤدي إلى
+ *    تغيير تصنيف العميل وتشويه تفضيل المستخدم بعد الاستعادة.
+ * 2. التراجع الآمن للإصدارات القديمة (Graceful Legacy Fallback): يُسمح بالاشتقاق المنطقي فقط عند غياب الحقل
+ *    تماماً من النسخ الاحتياطية القديمة جداً (Legacy Backups v1).
+ * 3. الفصل التام بين التحليل النحوي (Parsing) والتحقق المنطقي (Validation) وقواعد البيانات (Transactions).
+ * 4. الحفاظ على توافق الحقول القديمة (مثل habayeb_debts_db و customerId) لمنع كسر استعادة ملفات النسخ السابقة.
  */
 object MzdBackupSerializer {
 
@@ -117,8 +125,8 @@ object MzdBackupSerializer {
         if (txArr != null) {
             for (i in 0 until txArr.length()) {
                 val obj = txArr.getJSONObject(i)
-                val cId = obj.optString("customer_id", obj.optString("customerId", ""))
-                val tType = obj.optString("type", "")
+                val cId = obj.optString("customer_id", obj.optString("customerId", "")).trim()
+                val tType = obj.optString("type", "").trim()
                 if (cId.isNotEmpty() && tType.isNotEmpty()) {
                     customerIdToTxTypes.getOrPut(cId) { mutableSetOf() }.add(tType)
                 }
@@ -132,15 +140,31 @@ object MzdBackupSerializer {
         if (custArr != null) {
             for (i in 0 until custArr.length()) {
                 val obj = custArr.getJSONObject(i)
-                val cId = obj.optString("id", obj.optString("customer_id", ""))
+                val cId = obj.optString("id", obj.optString("customer_id", "")).trim()
 
-                var determinedInitialType = obj.optString("initial_type", obj.optString("initialType", TransactionType.OWED_BY_THEM.value))
-                val txTypesForCust = customerIdToTxTypes[cId]
-                if (txTypesForCust != null && txTypesForCust.isNotEmpty()) {
-                    if (txTypesForCust.contains(TransactionType.OWED_TO_THEM.value) || txTypesForCust.contains(TransactionType.PAYMENT_TO_THEM.value)) {
-                        determinedInitialType = TransactionType.OWED_TO_THEM.value
-                    } else if (txTypesForCust.contains(TransactionType.OWED_BY_THEM.value) || txTypesForCust.contains(TransactionType.PAYMENT_BY_THEM.value)) {
-                        determinedInitialType = TransactionType.OWED_BY_THEM.value
+                // التحقق من وجود قيمة صريحة لـ initial_type في ملف النسخ الاحتياطي
+                val explicitInitialType = when {
+                    obj.has("initial_type") && !obj.isNull("initial_type") -> obj.optString("initial_type").trim()
+                    obj.has("initialType") && !obj.isNull("initialType") -> obj.optString("initialType").trim()
+                    else -> ""
+                }
+
+                val determinedInitialType = if (explicitInitialType.isNotBlank()) {
+                    // الالتزام التام بالقيمة الصريحة المحفوظة من المستخدم وعدم إعادة اشتقاقها
+                    explicitInitialType
+                } else {
+                    // التراجع للاشتقاق فقط للنسخ القديمة التي لا تحتوي على الحقل
+                    val txTypesForCust = customerIdToTxTypes[cId]
+                    if (txTypesForCust != null && txTypesForCust.isNotEmpty()) {
+                        if (txTypesForCust.contains(TransactionType.OWED_TO_THEM.value) || txTypesForCust.contains(TransactionType.PAYMENT_TO_THEM.value)) {
+                            TransactionType.OWED_TO_THEM.value
+                        } else if (txTypesForCust.contains(TransactionType.OWED_BY_THEM.value) || txTypesForCust.contains(TransactionType.PAYMENT_BY_THEM.value)) {
+                            TransactionType.OWED_BY_THEM.value
+                        } else {
+                            TransactionType.OWED_BY_THEM.value
+                        }
+                    } else {
+                        TransactionType.OWED_BY_THEM.value
                     }
                 }
 
@@ -202,13 +226,13 @@ object MzdBackupSerializer {
                     obj.has("linkedMainTxId") && !obj.isNull("linkedMainTxId") -> obj.optString("linkedMainTxId", "").trim()
                     else -> null
                 }
-                val txId = obj.getString("id")
+                val txId = obj.getString("id").trim()
                 val cleanLinkedId = if (rawLinkedId.isNullOrBlank() || rawLinkedId.equals("null", ignoreCase = true) || rawLinkedId == "0" || rawLinkedId == txId) null else rawLinkedId
 
                 result.add(
                     HabayebTransaction(
                         id = txId,
-                        customerId = obj.optString("customer_id", obj.optString("customerId", "")),
+                        customerId = obj.optString("customer_id", obj.optString("customerId", "")).trim(),
                         type = obj.getString("type"),
                         amount = amtVal,
                         timestamp = obj.getLong("timestamp"),
@@ -228,4 +252,5 @@ object MzdBackupSerializer {
         return result
     }
 }
+
 

@@ -5,11 +5,21 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
 import com.example.R
 import java.io.File
 
+/**
+ * مساعد حفظ الملفات المصدرة في مجلد التنزيلات العام (Local File Saver to Public Downloads)
+ *
+ * المسؤوليات والمعايير الأمنية:
+ * 1. التوافق التام مع التخزين المحدود (Scoped Storage): استخدام واجهة MediaStore على Android 10+ (API 29+) مع إدارة علم IS_PENDING لمنع قراءة الملفات غير المكتملة.
+ * 2. العزل الآمن: نسخ الملفات المؤقتة من cacheDir إلى مجلد التنزيلات العام بطريقة حتمية وإغلاق مسارات التدفق بأمان (use blocks).
+ * 3. عدم تسريب مسارات النظام الداخلية للمستخدمين أو التطبيقات الأخرى.
+ */
 object LocalFileSaver {
+    private const val TAG = "LocalFileSaver"
 
     /**
      * Saves a cached file to the device's public Downloads directory.
@@ -75,7 +85,7 @@ object LocalFileSaver {
                 true
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to save file to public downloads", e)
             false
         }
     }

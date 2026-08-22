@@ -1,6 +1,7 @@
 package com.example.ui.screens.habayeb.components
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.viewModelScope
 import com.example.R
@@ -15,6 +16,14 @@ import java.math.BigDecimal
 import java.util.Calendar
 import java.util.UUID
 
+/**
+ * مساعد حفظ بيانات العميل والرصيد الافتتاحي (Add Customer Save & Calculation Helper)
+ *
+ * المسؤوليات المعمارية:
+ * 1. التحقق من المدخلات (الاسم، التفرد، نوع المعاملة، الرصيد الافتتاحي الإيجابي).
+ * 2. معالجة العملات الأجنبية وأسعار الصرف وتحويل الرصيد بدقة مالية (BigDecimal).
+ * 3. إسناد الحفظ إلى ViewModel وإدارة حالات التقدم والإشعارات دون تضخم كود الواجهة الرسومية (Composable).
+ */
 data class AddCustomerFormData(
     val nameStr: String,
     val phoneStr: String,
@@ -139,7 +148,7 @@ object AddCustomerSaveHelper {
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("AddCustomerSaveHelper", "Failed to save customer safely", e)
                 withContext(Dispatchers.Main) {
                     onIsSavingChange(false)
                 }

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.view.WindowManager
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -47,9 +48,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -57,12 +62,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.example.R
 import com.example.data.local.entities.AppSettings
 import com.example.ui.helper.HabayebMathHelper
 import com.example.ui.screens.habayeb.utils.CurrencyConfig
 import com.example.ui.screens.habayeb.utils.ExchangeRateHelper
+import kotlinx.coroutines.android.awaitFrame
+import java.math.BigDecimal
 
+/**
+ * نافذة ضبط وتعديل أسعار صرف العملات والعملة الافتراضية للتطبيق
+ * توفر تجربة مدمجة وسلسة لضبط أزواج الصرف وإعادة تقييم العمليات السابقة أو اللاحقة بدقة متناهية.
+ */
 @Composable
 fun CurrencySettingsDialog(
     settings: AppSettings,
@@ -72,8 +84,6 @@ fun CurrencySettingsDialog(
     val haptic = LocalHapticFeedback.current
     
     var localDefaultCurrency by remember { mutableStateOf(settings.currencySymbol) }
-    
-    // Hold local rates json
     var localExchangeRatesJson by remember { mutableStateOf(settings.exchangeRatesJson) }
 
     val currencyYer = stringResource(id = R.string.currency_yer)
@@ -81,14 +91,12 @@ fun CurrencySettingsDialog(
     val currencyUsd = stringResource(id = R.string.currency_usd)
     val currenciesToDisplay = listOf(currencyYer, currencySar, currencyUsd)
 
-    // Select which target currency to configure
     var selectedTargetCurrency by remember(localDefaultCurrency) {
         mutableStateOf(
             if (localDefaultCurrency == currencyYer) currencyUsd else currencyYer
         )
     }
 
-    // Determine current rate being configured
     val currentRateValue = ExchangeRateHelper.getRate(localExchangeRatesJson, localDefaultCurrency, selectedTargetCurrency)
 
     var rateInputStr by remember(localDefaultCurrency, selectedTargetCurrency) {
@@ -96,16 +104,13 @@ fun CurrencySettingsDialog(
     }
 
     val rateFocusRequester = remember { FocusRequester() }
-
-    // State for revaluation confirmation dialog
     var activeDialogState by remember { mutableStateOf<CurrencyDialogState>(CurrencyDialogState.None) }
 
-    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Auto-focus on exchange rate field upon entering
     LaunchedEffect(localDefaultCurrency, selectedTargetCurrency) {
         try {
-            kotlinx.coroutines.android.awaitFrame()
+            awaitFrame()
             rateFocusRequester.requestFocus()
             keyboardController?.show()
         } catch (e: Exception) {
@@ -117,19 +122,18 @@ fun CurrencySettingsDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        val view = androidx.compose.ui.platform.LocalView.current
+        val view = LocalView.current
         DisposableEffect(view) {
-            val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
-            window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            val window = (view.parent as? DialogWindowProvider)?.window
+            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
             onDispose {}
         }
         Card(
             modifier = Modifier
-                .width(280.dp) // Perfect mid-width to host side-by-side contents gracefully
+                .width(280.dp)
                 .padding(4.dp)
                 .imePadding()
                 .animateContentSize(animationSpec = tween(200)),
-            // Highly creative, modern asymmetrical rounded leaf/petal shape
             shape = RoundedCornerShape(
                 topStart = 28.dp,
                 bottomEnd = 28.dp,
@@ -148,313 +152,95 @@ fun CurrencySettingsDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Centered Mini Title & Close Trigger
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.currency_settings_dialog_title),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-                    
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .size(18.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(R.string.currency_settings_dialog_close),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-                }
+                CurrencyDialogHeader(onDismiss = onDismiss)
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
 
-                // Side-by-Side configuration Row (No flag graphics, 100% text-based pure aesthetic)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Left Column: Default main App Currency
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.currency_settings_dialog_default),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                CurrencySelectorColumns(
+                    currenciesToDisplay = currenciesToDisplay,
+                    localDefaultCurrency = localDefaultCurrency,
+                    selectedTargetCurrency = selectedTargetCurrency,
+                    rateInputStr = rateInputStr,
+                    rateFocusRequester = rateFocusRequester,
+                    haptic = haptic,
+                    currencyYer = currencyYer,
+                    currencyUsd = currencyUsd,
+                    onDefaultCurrencyChange = { newDefault ->
+                        val oldDefault = localDefaultCurrency
+                        localDefaultCurrency = newDefault
+                        if (selectedTargetCurrency == newDefault) {
+                            selectedTargetCurrency = if (newDefault == currencyYer) currencyUsd else currencyYer
+                        }
+                        localExchangeRatesJson = ExchangeRateHelper.migrateRates(
+                            localExchangeRatesJson,
+                            oldDefault,
+                            newDefault
                         )
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                .padding(2.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            currenciesToDisplay.forEach { symbol ->
-                                val isSelected = localDefaultCurrency == symbol
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(22.dp)
-                                        .clip(RoundedCornerShape(topStart = 6.dp, bottomEnd = 6.dp, topEnd = 2.dp, bottomStart = 2.dp))
-                                        .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            val oldDefault = localDefaultCurrency
-                                            localDefaultCurrency = symbol
-                                            if (selectedTargetCurrency == symbol) {
-                                                selectedTargetCurrency = if (symbol == currencyYer) currencyUsd else currencyYer
-                                            }
-                                            localExchangeRatesJson = ExchangeRateHelper.migrateRates(
-                                                localExchangeRatesJson,
-                                                oldDefault,
-                                                symbol
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = symbol,
-                                        fontSize = 9.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
+                    },
+                    onTargetCurrencyChange = { newTarget ->
+                        selectedTargetCurrency = newTarget
+                    },
+                    onRateInputChange = { newInput ->
+                        val cleaned = CurrencyConfig.normalizeDigits(newInput)
+                        rateInputStr = cleaned
+                        val parsed = cleaned.toDoubleOrNull() ?: 1.0
+                        localExchangeRatesJson = ExchangeRateHelper.setRate(localExchangeRatesJson, localDefaultCurrency, selectedTargetCurrency, parsed)
                     }
-
-                    // Right Column: Target exchange rates
-                    Column(
-                        modifier = Modifier.weight(1.3f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.currency_settings_dialog_target),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-
-                        val availableTargets = remember(currenciesToDisplay, localDefaultCurrency) {
-                            currenciesToDisplay.filter { it != localDefaultCurrency }
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.outlineVariant)
-                                .padding(1.5.dp),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            availableTargets.forEach { symbol ->
-                                val isSelected = selectedTargetCurrency == symbol
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(20.dp)
-                                        .clip(RoundedCornerShape(topStart = 5.dp, bottomEnd = 5.dp, topEnd = 1.5.dp, bottomStart = 1.5.dp))
-                                        .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            selectedTargetCurrency = symbol
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = symbol,
-                                        fontSize = 8.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        // Ultra-compact custom zero-padding equation input field
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(24.dp)
-                                .clip(RoundedCornerShape(topStart = 6.dp, bottomEnd = 6.dp, topEnd = 2.dp, bottomStart = 2.dp))
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(0.8.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(topStart = 6.dp, bottomEnd = 6.dp, topEnd = 2.dp, bottomStart = 2.dp))
-                                .padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "1 $selectedTargetCurrency =",
-                                fontSize = 7.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 2.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                BasicTextField(
-                                    value = rateInputStr,
-                                    onValueChange = { newVal ->
-                                        val cleaned = CurrencyConfig.normalizeDigits(newVal)
-                                        rateInputStr = cleaned
-                                        val parsed = cleaned.toDoubleOrNull() ?: 1.0
-                                        localExchangeRatesJson = ExchangeRateHelper.setRate(localExchangeRatesJson, localDefaultCurrency, selectedTargetCurrency, parsed)
-                                    },
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    textStyle = androidx.compose.ui.text.TextStyle(
-                                        textAlign = TextAlign.Center,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .focusRequester(rateFocusRequester),
-                                    decorationBox = { innerTextField ->
-                                        Box(
-                                            contentAlignment = Alignment.Center,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            if (rateInputStr.isEmpty()) {
-                                                Text(
-                                                    text = stringResource(R.string.currency_settings_dialog_price),
-                                                    fontSize = 8.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
-                                            innerTextField()
-                                        }
-                                    }
-                                )
-                            }
-
-                            Text(
-                                text = localDefaultCurrency,
-                                fontSize = 7.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Centered action buttons with creative matched edges
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            val finalRate = rateInputStr.trim().toDoubleOrNull() ?: currentRateValue
-                            if (finalRate > 0.0) {
-                                val migratedOriginalJson = ExchangeRateHelper.migrateRates(
-                                    settings.exchangeRatesJson,
-                                    settings.currencySymbol,
-                                    localDefaultCurrency
-                                )
-                                val alreadyHasRate = ExchangeRateHelper.hasRate(
-                                    migratedOriginalJson,
-                                    localDefaultCurrency,
-                                    selectedTargetCurrency
-                                )
-                                val existingRate = ExchangeRateHelper.getRate(
-                                    migratedOriginalJson,
-                                    localDefaultCurrency,
-                                    selectedTargetCurrency
-                                )
-                                val oldRateBD = java.math.BigDecimal.valueOf(existingRate)
-                                val newRateBD = java.math.BigDecimal.valueOf(finalRate)
-                                val rateChanged = existingRate > 0.0 && oldRateBD.compareTo(newRateBD) != 0
+                CurrencyActionButtons(
+                    haptic = haptic,
+                    onDismiss = onDismiss,
+                    onSave = {
+                        val finalRate = rateInputStr.trim().toDoubleOrNull() ?: currentRateValue
+                        if (finalRate > 0.0) {
+                            val migratedOriginalJson = ExchangeRateHelper.migrateRates(
+                                settings.exchangeRatesJson,
+                                settings.currencySymbol,
+                                localDefaultCurrency
+                            )
+                            val alreadyHasRate = ExchangeRateHelper.hasRate(
+                                migratedOriginalJson,
+                                localDefaultCurrency,
+                                selectedTargetCurrency
+                            )
+                            val existingRate = ExchangeRateHelper.getRate(
+                                migratedOriginalJson,
+                                localDefaultCurrency,
+                                selectedTargetCurrency
+                            )
+                            val oldRateBD = BigDecimal.valueOf(existingRate)
+                            val newRateBD = BigDecimal.valueOf(finalRate)
+                            val rateChanged = existingRate > 0.0 && oldRateBD.compareTo(newRateBD) != 0
 
-                                if (alreadyHasRate && rateChanged) {
-                                    activeDialogState = CurrencyDialogState.RevalueConfirm(selectedTargetCurrency, finalRate)
-                                } else {
-                                    val updatedExchangeRatesJson = ExchangeRateHelper.setRate(
-                                        localExchangeRatesJson,
-                                        localDefaultCurrency,
-                                        selectedTargetCurrency,
-                                        finalRate
-                                    )
-                                    val updatedSettings = settings.copy(
-                                        currencySymbol = localDefaultCurrency,
-                                        exchangeRatesJson = updatedExchangeRatesJson
-                                    )
-                                    onSaveSettings(updatedSettings, selectedTargetCurrency, finalRate, false)
-                                    onDismiss()
-                                }
+                            if (alreadyHasRate && rateChanged) {
+                                activeDialogState = CurrencyDialogState.RevalueConfirm(selectedTargetCurrency, finalRate)
                             } else {
-                                // Save standard settings if no valid rate is edited
+                                val updatedExchangeRatesJson = ExchangeRateHelper.setRate(
+                                    localExchangeRatesJson,
+                                    localDefaultCurrency,
+                                    selectedTargetCurrency,
+                                    finalRate
+                                )
                                 val updatedSettings = settings.copy(
                                     currencySymbol = localDefaultCurrency,
-                                    exchangeRatesJson = localExchangeRatesJson
+                                    exchangeRatesJson = updatedExchangeRatesJson
                                 )
-                                onSaveSettings(updatedSettings, "", 0.0, false)
+                                onSaveSettings(updatedSettings, selectedTargetCurrency, finalRate, false)
                                 onDismiss()
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp),
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .height(24.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.currency_settings_dialog_save),
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                        } else {
+                            val updatedSettings = settings.copy(
+                                currencySymbol = localDefaultCurrency,
+                                exchangeRatesJson = localExchangeRatesJson
+                            )
+                            onSaveSettings(updatedSettings, "", 0.0, false)
+                            onDismiss()
+                        }
                     }
-
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.outlineVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(24.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.currency_settings_dialog_cancel),
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                )
             }
         }
     }
@@ -498,5 +284,281 @@ fun CurrencySettingsDialog(
                 activeDialogState = CurrencyDialogState.None
             }
         )
+    }
+}
+
+/**
+ * شريط العنوان وزر الإغلاق المصغر لنافذة إعدادات العملة
+ */
+@Composable
+private fun CurrencyDialogHeader(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = stringResource(R.string.currency_settings_dialog_title),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+        
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .size(18.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.currency_settings_dialog_close),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(12.dp)
+            )
+        }
+    }
+}
+
+/**
+ * أعمدة الاختيار الثنائي بين العملة الافتراضية للتطبيق وأزواج الصرف المستهدفة
+ */
+@Composable
+private fun CurrencySelectorColumns(
+    currenciesToDisplay: List<String>,
+    localDefaultCurrency: String,
+    selectedTargetCurrency: String,
+    rateInputStr: String,
+    rateFocusRequester: FocusRequester,
+    haptic: HapticFeedback,
+    currencyYer: String,
+    currencyUsd: String,
+    onDefaultCurrencyChange: (String) -> Unit,
+    onTargetCurrencyChange: (String) -> Unit,
+    onRateInputChange: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // العمود الأيمن: العملة الافتراضية للتطبيق
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.currency_settings_dialog_default),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                    .padding(2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                currenciesToDisplay.forEach { symbol ->
+                    val isSelected = localDefaultCurrency == symbol
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(22.dp)
+                            .clip(RoundedCornerShape(topStart = 6.dp, bottomEnd = 6.dp, topEnd = 2.dp, bottomStart = 2.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDefaultCurrencyChange(symbol)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = symbol,
+                            fontSize = 9.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // العمود الأيسر: عملات الصرف وحقل إدخال المعادلة
+        Column(
+            modifier = Modifier.weight(1.3f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.currency_settings_dialog_target),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            val availableTargets = remember(currenciesToDisplay, localDefaultCurrency) {
+                currenciesToDisplay.filter { it != localDefaultCurrency }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+                    .padding(1.5.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                availableTargets.forEach { symbol ->
+                    val isSelected = selectedTargetCurrency == symbol
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(topStart = 5.dp, bottomEnd = 5.dp, topEnd = 1.5.dp, bottomStart = 1.5.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onTargetCurrencyChange(symbol)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = symbol,
+                            fontSize = 8.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // حقل إدخال معادلة الصرف بدقة
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .clip(RoundedCornerShape(topStart = 6.dp, bottomEnd = 6.dp, topEnd = 2.dp, bottomStart = 2.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(0.8.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(topStart = 6.dp, bottomEnd = 6.dp, topEnd = 2.dp, bottomStart = 2.dp))
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "1 $selectedTargetCurrency =",
+                    fontSize = 7.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BasicTextField(
+                        value = rateInputStr,
+                        onValueChange = onRateInputChange,
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = TextStyle(
+                            textAlign = TextAlign.Center,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(rateFocusRequester),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (rateInputStr.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.currency_settings_dialog_price),
+                                        fontSize = 8.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
+
+                Text(
+                    text = localDefaultCurrency,
+                    fontSize = 7.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * أزرار الحفظ والإلغاء لنافذة إعدادات العملة
+ */
+@Composable
+private fun CurrencyActionButtons(
+    haptic: HapticFeedback,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Button(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSave()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp),
+            modifier = Modifier
+                .weight(1.3f)
+                .height(24.dp),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.currency_settings_dialog_save),
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+
+        Button(
+            onClick = onDismiss,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.outlineVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp),
+            modifier = Modifier
+                .weight(1f)
+                .height(24.dp),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.currency_settings_dialog_cancel),
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }

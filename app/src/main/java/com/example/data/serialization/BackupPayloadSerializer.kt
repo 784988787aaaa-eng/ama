@@ -3,6 +3,7 @@ package com.example.data.serialization
 import android.content.Context
 import android.util.Log
 import com.example.data.local.AppDatabase
+import com.example.data.local.BigDecimalConverter
 import com.example.data.local.entities.AppSettings
 import com.example.data.local.entities.CustomCategory
 import com.example.data.local.entities.DatabaseDefaults
@@ -19,7 +20,7 @@ import java.math.BigDecimal
 import java.security.MessageDigest
 
 /**
- * Data container encapsulating all entities and extras for a full backup payload.
+ * وعاء بيانات النسخ الاحتياطي الكامل (Backup Payload Container)
  */
 data class BackupPayloadData(
     val settings: AppSettings,
@@ -36,8 +37,17 @@ data class BackupPayloadData(
 )
 
 /**
- * Unified Payload Serializer & Checksum Engine for local and cloud backup payloads.
- * Consolidates JSON serialization, schema versioning, metadata enrichment, and SHA-256 hash calculation.
+ * محرك تسلسل وتشفير وفحص سلامة النسخ الاحتياطية (Unified Backup Serializer & Integrity Engine)
+ *
+ * التوثيق المعماري للمبادئ الصارمة:
+ * 1. وجود البصمة الأمنية (Integrity Hash): لضمان سلامة النسخة الاحتياطية من التلف العفوي أثناء النقل
+ *    أو التعديل غير المصرح به، ومقارنة التغييرات بدقة قبل التخزين السحابي.
+ * 2. الترتيب الحتمي للبيانات (Deterministic Ordering): خرائط الذاكرة (Maps/HashSets) وترتيب استرجاع قواعد
+ *    البيانات قد يختلف بين الأجهزة وإصدارات أندرويد؛ لذا يتم ترتيب جميع القوائم والمجموعات منطقياً قبل التشفير
+ *    أو بناء البصمة لضمان تطابق البصمة لنفس البيانات بنسبة 100%.
+ * 3. استبعاد المعرفات الداخلية التلقائية (Room Internal IDs): الاعتماد يكون حصرياً على الهوية المنطقية للكيانات
+ *    (مثل UUID أو اسم البند أو الطابع الزمني) وليس على Auto-increment rowid لقاعدة البيانات المحلية.
+ * 4. الحفاظ التام على الدقة المالية لـ BigDecimal ومنع أي تحويل وسيط عبر optDouble أو Double.toString.
  */
 object BackupPayloadSerializer {
     private const val TAG = "BackupPayloadSerializer"
@@ -130,6 +140,76 @@ object BackupPayloadSerializer {
     }
 
     /**
+     * حساب بصمة تكامل منطقية حتمية (Deterministic Logical Integrity Hash)
+     * ترتب الكيانات منطقياً لضمان استقرار البصمة بغض النظر عن ترتيب المعالجة في الذاكرة.
+     */
+    fun calculateIntegrityHash(data: BackupPayloadData): String {
+        val sb = StringBuilder()
+        sb.append("settings:").append(data.settings.currencySymbol).append("|")
+            .append(data.settings.schoolExpensesEnabled).append("|")
+            .append(data.settings.exchangeRatesJson).append(";")
+
+        sb.append("commitments:")
+        data.commitments.sortedWith(compareBy({ it.orderIndex }, { it.name })).forEach {
+            sb.append(it.name).append(",").append(it.targetAmount.toPlainString()).append(",")
+                .append(it.currentProgress.toPlainString()).append(",")
+                .append(it.orderIndex).append("|")
+        }
+        sb.append(";")
+
+        sb.append("transactions:")
+        data.transactions.sortedWith(compareBy({ it.timestamp }, { it.id })).forEach {
+            sb.append(it.id).append(",").append(it.timestamp).append(",")
+                .append(it.type).append(",").append(it.category).append(",")
+                .append(it.amount.toPlainString()).append(",")
+                .append(it.description).append("|")
+        }
+        sb.append(";")
+
+        sb.append("customers:")
+        data.habayebCustomers.sortedBy { it.id }.forEach {
+            sb.append(it.id).append(",").append(it.name).append(",")
+                .append(it.phone).append(",").append(it.initialType).append("|")
+        }
+        sb.append(";")
+
+        sb.append("habayebTx:")
+        data.habayebTransactions.sortedWith(compareBy({ it.timestamp }, { it.id })).forEach {
+            sb.append(it.id).append(",").append(it.customerId).append(",")
+                .append(it.type).append(",").append(it.amount.toPlainString()).append(",")
+                .append(it.timestamp).append(",").append(it.currencyCode).append(",")
+                .append(it.foreignAmount.toPlainString()).append(",")
+                .append(it.linkedMainTxId ?: "").append("|")
+        }
+        sb.append(";")
+
+        sb.append("deletedItems:")
+        data.deletedItems.sortedBy { it.id }.forEach {
+            sb.append(it.id).append(",").append(it.sourceSystem).append(",")
+                .append(it.originalTableName).append(",").append(it.deletedAt).append("|")
+        }
+        sb.append(";")
+
+        sb.append("customCategories:")
+        data.customCategories.sortedWith(compareBy({ it.displayOrder }, { it.name })).forEach {
+            sb.append(it.name).append(",").append(it.tabType).append(",")
+                .append(it.displayOrder).append(",").append(it.isSystemClosed).append("|")
+        }
+        sb.append(";")
+
+        data.categoryLinks.toSortedMap().forEach { (k, v) ->
+            sb.append("catLink:").append(k).append("=").append(v).append(";")
+        }
+
+        data.pinnedCustomerIdsByCategory.toSortedMap().forEach { (k, set) ->
+            sb.append("pinned:").append(k).append("=")
+                .append(set.sorted().joinToString(",")).append(";")
+        }
+
+        return calculateSha256Hash(sb.toString())
+    }
+
+    /**
      * Streams full application payload data directly into a Writer using [android.util.JsonWriter]
      * to ensure constant memory footprint and prevent OutOfMemoryError.
      */
@@ -143,7 +223,7 @@ object BackupPayloadSerializer {
         jsonWriter.name(KEY_APP_NAME).value("Mizan Al-Dar")
         jsonWriter.name(KEY_APP_VERSION).value("1.1.0")
         jsonWriter.name(KEY_BACKUP_TIMESTAMP).value(System.currentTimeMillis() / 1000)
-        jsonWriter.name(KEY_SECURITY_HASH).value("security_" + (data.settings.hashCode() + data.transactions.size * 31).toString())
+        jsonWriter.name(KEY_SECURITY_HASH).value(calculateIntegrityHash(data))
         jsonWriter.endObject()
 
         // Settings
@@ -251,10 +331,10 @@ object BackupPayloadSerializer {
         if (data.pinnedCustomerIdsByCategory.isNotEmpty()) {
             jsonWriter.name(KEY_PINNED_CUSTOMER_IDS_BY_CATEGORY)
             jsonWriter.beginObject()
-            for ((catKey, set) in data.pinnedCustomerIdsByCategory) {
+            for ((catKey, set) in data.pinnedCustomerIdsByCategory.toSortedMap()) {
                 jsonWriter.name(catKey)
                 jsonWriter.beginArray()
-                set.forEach { jsonWriter.value(it) }
+                set.sorted().forEach { jsonWriter.value(it) }
                 jsonWriter.endArray()
             }
             jsonWriter.endObject()
@@ -416,21 +496,20 @@ object BackupPayloadSerializer {
     )
 
     /**
-     * Helper to retrieve BigDecimal from JSON safely.
+     * استخراج قيمة BigDecimal من JSON بأمان ودقة تامة مع رفض التحويلات العائمة الفاقدة للدقة
      */
     fun getBigDecimal(obj: JSONObject, key: String, fallback: String = "0"): BigDecimal {
         if (!obj.has(key)) return BigDecimal(fallback)
-        val valueStr = obj.optString(key, "")
-        if (valueStr.isNotBlank() && valueStr != "null") {
-            try {
-                return BigDecimal(valueStr.trim())
-            } catch (_: Exception) {
-                // Ignore and try fallback
-            }
+        val raw = obj.opt(key) ?: return BigDecimal(fallback)
+        if (raw is BigDecimal) return raw
+        val valueStr = raw.toString().trim()
+        if (valueStr.isEmpty() || valueStr.equals("null", ignoreCase = true)) {
+            return BigDecimal(fallback)
         }
-        val doubleVal = obj.optDouble(key, 0.0)
+        val cleaned = BigDecimalConverter.cleanNumberString(valueStr)
+        if (cleaned.isEmpty()) return BigDecimal(fallback)
         return try {
-            BigDecimal.valueOf(doubleVal)
+            BigDecimal(cleaned)
         } catch (_: Exception) {
             BigDecimal(fallback)
         }
@@ -496,4 +575,5 @@ object BackupPayloadSerializer {
         Triple(settings, commitmentsList, transactionsList)
     }
 }
+
 

@@ -8,6 +8,16 @@ import androidx.room.PrimaryKey
 import com.example.ui.viewmodel.FinanceConstants
 import java.math.BigDecimal
 
+/**
+ * كيان قيود معاملات عملاء الحبايب في قاعدة بيانات Room (Habayeb Transaction Entity)
+ *
+ * التوثيق والحدود المعمارية:
+ * 1. الدقة المالية الإلزامية: جميع الحقول المالية (amount, foreignAmount, exchangeRate, equivalentAmount)
+ *    تستخدم نوع BigDecimal حصراً لتفادي أي فقدان في دقة الكسور أو تراكم أخطاء الفاصلة العائمة.
+ * 2. دعم العملات المتعددة والصرف: تخزن المعاملة قيمة العملة الأجنبية، وسعر الصرف، والقيمة المكافئة بالعملة الأساسية.
+ * 3. مفتاح الربط الرئيسي (linkedMainTxId): يربط قيد الحبايب بالمعاملة النظيرة في دفتر اليومية العام لضمان التزامن المالي.
+ * 4. التكامل المرجعي (ForeignKey): مرتبط بحذف وتحديث متتالي (CASCADE) مع كيان العميل HabayebCustomer.
+ */
 @Entity(
     tableName = "habayeb_transactions",
     foreignKeys = [

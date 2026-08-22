@@ -6,6 +6,14 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.domain.model.TransactionType
 
+/**
+ * كيان بيانات عملاء الحبايب في قاعدة بيانات Room (Habayeb Customer Entity)
+ *
+ * التوثيق والحدود المعمارية:
+ * 1. يمثل هذا الكيان العقد المباشر مع جدول `habayeb_customers` في قاعدة البيانات المحلية.
+ * 2. أسماء الأعمدة والأنواع والفهارس ثابتة تاريخياً لضمان التوافق التام مع ترقيات قاعدة البيانات (Room Migrations) ومنظومة النسخ الاحتياطي المشفر.
+ * 3. حقل `initialType`: يحفظ نية المستخدم الصريحة في تصنيف العميل عند الإنشاء (له/عليه) ولا يتم تعديله تلقائياً مع تغير الأرصدة.
+ */
 @Entity(
     tableName = "habayeb_customers",
     indices = [

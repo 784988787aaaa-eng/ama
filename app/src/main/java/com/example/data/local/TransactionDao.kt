@@ -9,6 +9,13 @@ import com.example.data.local.entities.TransactionDb
 import kotlinx.coroutines.flow.Flow
 import java.math.BigDecimal
 
+/**
+ * واجهة استعلامات قيود دفتر اليومية المالي العام (Main Ledger Transaction Dao)
+ *
+ * المسؤوليات المعمارية:
+ * 1. استرجاع وتدفق قيود الدفتر اليومي مرتبة تنازلياً حسب الطابع الزمني للاستفادة من الفهارس المخصصة.
+ * 2. توفير مجاميع السيولة النقدية والمصروفات الدورية بدقة عبر Room TypeConverter (BigDecimal) دون فقدان للكسور.
+ */
 @Dao
 interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY timestamp DESC")

@@ -353,9 +353,10 @@ object MasterBookletPdfEngine {
             onPageBreakNeeded = { newHeader ->
                 ctx.startNewPage()
                 if (newHeader && !ctx.isDryRun) {
-                    val currentCanvas = ctx.currentPageCanvas!!
-                    PdfPageRenderer.drawSubsequentPageHeader(currentCanvas, customer.name, ctx.primaryColorHex, ctx.context)
-                    PdfPageRenderer.drawTableHeader(currentCanvas, 45f, ctx.context, customer.originalCustomer.initialType)
+                    ctx.currentPageCanvas?.let { currentCanvas ->
+                        PdfPageRenderer.drawSubsequentPageHeader(currentCanvas, customer.name, ctx.primaryColorHex, ctx.context)
+                        PdfPageRenderer.drawTableHeader(currentCanvas, 45f, ctx.context, customer.originalCustomer.initialType)
+                    }
                 }
                 ctx.currentPageCanvas
             }

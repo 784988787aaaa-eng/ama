@@ -9,6 +9,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * مدير مسارات ومجلدات النسخ الاحتياطي المحلي (Local Backup Directory Manager)
+ *
+ * المسؤوليات المعمارية:
+ * 1. توفير مسارات تخزين متوافقة وآمنة مع متطلبات التخزين المحدود (Scoped Storage).
+ * 2. تقسيم النسخ الاحتياطية تلقائياً في مجلدات شهرية (yyyy-MM) لتنظيم الملفات وسهولة تصفحها.
+ * 3. استرجاع والبحث عن ملفات النسخ الاحتياطي المشفرة ذات الامتداد (.mzd) بأمان تام.
+ */
 class BackupDirectoryManager(private val context: Context) {
 
     companion object {

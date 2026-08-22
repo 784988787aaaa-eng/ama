@@ -1,13 +1,22 @@
 package com.example.ui.screens.habayeb.utils
 
 import android.content.Context
+import android.util.Log
 import com.example.ui.viewmodel.HabayebFinanceViewModel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
-
 import java.math.BigDecimal
 
+/**
+ * مدير المعاملات المجدولة والمتكررة (Habayeb Recurring Transactions Manager)
+ *
+ * المسؤوليات والحدود المعمارية:
+ * 1. نمذجة وتحويل إعدادات المعاملات المتكررة (Parsing & Serialization) مع دقة مالية صارمة (BigDecimal).
+ * 2. الحساب الزمني الحتمي لمواعيد الاستحقاق (اليومي، الأسبوعي، الشهري) وتوليد المعاملات عبر ViewModel.
+ * 3. حماية العمليات بحصر التكرارات بحد أقصى (Sweep & Execution limit) لمنع التجميد أو إنشاء مئات المعاملات الزائدة.
+ * 4. إدارة التخزين المستقل في SharedPreferences بمفتاح `mizan_recurring_prefs` لمنع تداخل الجداول.
+ */
 data class RecurringConfig(
     val id: String,
     val originalTxId: String,
@@ -130,6 +139,7 @@ data class RecurringConfig(
 }
 
 object HabayebRecurringManager {
+    private const val TAG = "HabayebRecurringManager"
     private const val PREFS_NAME = "mizan_recurring_prefs"
     private const val KEY_CONFIGS = "recurring_configs"
 
@@ -146,7 +156,7 @@ object HabayebRecurringManager {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error parsing recurring configurations JSON", e)
         }
         return list
     }

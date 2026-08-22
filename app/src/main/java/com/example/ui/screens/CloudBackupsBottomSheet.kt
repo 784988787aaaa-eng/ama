@@ -243,15 +243,16 @@ fun CloudBackupsBottomSheet(
     }
 
     // --- Action Overlay Dialogs ---
-    if (ongoingActionMessage != null) {
-        CloudOngoingActionDialog(ongoingActionMessage!!)
+    val currentOngoingMessage = ongoingActionMessage
+    if (currentOngoingMessage != null) {
+        CloudOngoingActionDialog(currentOngoingMessage)
     }
 
-    if (showRestoreConfirmId != null) {
-        val targetId = showRestoreConfirmId!!
+    val currentRestoreId = showRestoreConfirmId
+    if (currentRestoreId != null) {
         CloudRestoreConfirmDialog(
             context = context,
-            targetId = targetId,
+            targetId = currentRestoreId,
             cloudBackups = cloudBackups,
             viewModel = viewModel,
             onDismiss = { showRestoreConfirmId = null },
@@ -261,11 +262,11 @@ fun CloudBackupsBottomSheet(
         )
     }
 
-    if (showDeleteConfirmId != null) {
-        val targetId = showDeleteConfirmId!!
+    val currentDeleteId = showDeleteConfirmId
+    if (currentDeleteId != null) {
         CloudDeleteConfirmDialog(
             context = context,
-            targetId = targetId,
+            targetId = currentDeleteId,
             cloudBackups = cloudBackups,
             viewModel = viewModel,
             onDismiss = { showDeleteConfirmId = null },

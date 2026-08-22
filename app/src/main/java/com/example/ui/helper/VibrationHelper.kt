@@ -6,6 +6,13 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 
+/**
+ * مساعد ردود الفعل اللمسية والاهتزاز (Haptic & Vibration Feedback Helper)
+ *
+ * المسؤوليات المعمارية:
+ * 1. دعم التوافقية العكسية لأنظمة Android القديمة والحديثة (Vibrator vs VibratorManager).
+ * 2. عزل استدعاءات عتاد الاهتزاز عن واجهة المستخدم لضمان تجربة سلسة وتفادي انهيار التطبيق حال غياب العتاد أو رفض الإذن.
+ */
 object VibrationHelper {
     private val SUCCESS_PATTERN = longArrayOf(0, 40, 80, 80)
     private val DELETE_PATTERN = longArrayOf(0, 100, 60, 100)

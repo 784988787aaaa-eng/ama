@@ -7,7 +7,12 @@ import androidx.room.PrimaryKey
 import java.math.BigDecimal
 
 /**
- * قيد معاملات دفتر اليومية المالي
+ * كيان قيود معاملات دفتر اليومية المالي العام (Main Ledger Transaction Entity)
+ *
+ * التوثيق والحدود المعمارية:
+ * 1. يمثل هذا الكيان سجلات المصروفات والإيرادات اليومية في جدول `transactions`.
+ * 2. الحساب المالي الدقيق: حقل `amount` يستخدم BigDecimal حصراً لضمان سلامة المجاميع المحاسبية.
+ * 3. الفهارس المركبة (type + timestamp, category + timestamp): مصممة لتسريع استعلامات التقارير والرسوم البيانية وتصفية الفئات.
  */
 @Entity(
     tableName = "transactions",

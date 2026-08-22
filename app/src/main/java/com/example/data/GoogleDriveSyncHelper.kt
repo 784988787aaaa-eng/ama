@@ -33,6 +33,17 @@ data class CloudBackupFile(
     val createdTime: String
 )
 
+/**
+ * واجهة التنسيق والمزامنة السحابية مع Google Drive (Google Drive Sync Facade)
+ *
+ * المسؤوليات المعمارية الحاكمة:
+ * 1. تعمل هذه الفئة كـ Facade موحد يجمع وينسق بين الخدمات المتخصصة:
+ *    - GoogleDriveAuthManager: لإدارة الجلسات والرموز المميزة (OAuth & Refresh Tokens).
+ *    - GoogleDriveFolderNavigator: للبحث وإنشاء المجلدات وسرد النسخ الاحتياطية.
+ *    - GoogleDriveNetworkUploader: لمعالجة تدفقات الرفع والتنزيل وحذف الملفات السحابية.
+ * 2. الحفاظ على واجهة برمجة تطبيقات مستقرة لـ ViewModels والـ Workers مع عزل تفاصيل الشبكة.
+ * 3. حماية بيانات الاعتماد وتصفير الجلسات بأمان في حالة انتهاء الصلاحية أو عدم التطابق عند إعادة التثبيت.
+ */
 class GoogleDriveSyncHelper(private val context: Context) {
 
     companion object {

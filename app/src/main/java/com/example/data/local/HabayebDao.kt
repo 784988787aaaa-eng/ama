@@ -12,6 +12,14 @@ import com.example.data.local.entities.HabayebCustomer
 import com.example.data.local.entities.HabayebTransaction
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * واجهة استعلامات ووصول بيانات عملاء ومعاملات الحبايب (Habayeb Dao)
+ *
+ * المسؤوليات المعمارية الحاكمة:
+ * 1. حصر المسؤولية في عمليات قراءة وكتابة البيانات فقط دون إجراء حسابات مالية أو تقريب أرقام.
+ * 2. تأمين العمليات المركبة (مثل حذف العميل ومعاملاته أو إدراج عميل برصيد افتتاحي) داخل @Transaction لضمان الذرية (Atomicity) ومنع الحالات الجزئية للبيانات.
+ * 3. دعم التدفقات الحية (Flow) لواجهات العرض، مع دوال معلقة مباشرة (Direct/Suspend) لعمليات المعالجة الخلفية وعمال المزامنة (Workers).
+ */
 @Dao
 interface HabayebDao {
 

@@ -168,8 +168,9 @@ fun CustomerTypeChangeSection(
                 }
                 TextButton(
                     onClick = {
-                        val newType = pendingTypeChange!!
-                        onUpdateCustomerType(newType)
+                        pendingTypeChange?.let { newType ->
+                            onUpdateCustomerType(newType)
+                        }
                         pendingTypeChange = null
                         onDismiss()
                     }

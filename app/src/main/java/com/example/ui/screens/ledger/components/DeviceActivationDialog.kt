@@ -214,8 +214,8 @@ fun DeviceActivationDialog(
                                     }
                                 },
                                 onGoogleActivateClick = {
-                                    if (!storedEmail.isNullOrBlank()) {
-                                        viewModel.activateWithFirebaseEmail(storedEmail!!) { res ->
+                                    storedEmail?.takeIf { it.isNotBlank() }?.let { email ->
+                                        viewModel.activateWithFirebaseEmail(email) { res ->
                                             actionFeedbackMessage = when (res) {
                                                 is LicenseCheckResult.Success -> null
                                                 is LicenseCheckResult.DeviceMismatch -> context.getString(R.string.licensing_fluent_mismatch_error)

@@ -2,6 +2,7 @@ package com.example.domain.usecase.habayeb
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Log
 import android.widget.Toast
 import com.example.R
 import com.example.data.local.entities.CustomCategory
@@ -9,11 +10,21 @@ import com.example.data.repository.FinanceRepository
 import com.example.ui.helper.VibrationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * مدير تصنيفات وتثبيتات عملاء الحبايب (Habayeb Category & Pinning Manager)
+ *
+ * المسؤوليات المعمارية الحاكمة:
+ * 1. عزل إدارة التصنيفات والتثبيتات وقواعد الترتيب خارج ViewModel في طبقة Domain/UseCase.
+ * 2. الاحتفاظ بذاكرة تخزين مؤقتة سريعة وآمنة للخيوط (ConcurrentHashMap) للروابط والتثبيتات لتجنب استدعاء SharedPreferences المتكرر أثناء تصفح القوائم.
+ * 3. إدارة عمليات الحذف وإعادة التسمية والترتيب الأفقي بدقة ومراعاة اتجاه واجهة المستخدم من اليمين إلى اليسار (RTL).
+ * 4. الحفاظ التام على المفاتيح التوافقية (PREFIX_CAT_LINK و PREFIX_KEY_PINNED_IN) لمنع كسر أي روابط سابقة.
+ */
 class HabayebCategoryManager(
     private val application: Application,
     private val repository: FinanceRepository,
@@ -23,7 +34,7 @@ class HabayebCategoryManager(
     private val pinnedMapCache = ConcurrentHashMap<String, Set<String>>()
 
     init {
-        // Pre-load all category links and pinned sets into high-speed memory cache once
+        // تحميل مسبق لكافة الروابط والتثبيتات في ذاكرة الوصول السريع مرة واحدة عند التهيئة
         try {
             sharedPrefs.all.forEach { (key, value) ->
                 if (key.startsWith(PREFIX_CAT_LINK) && value is String) {
@@ -35,7 +46,7 @@ class HabayebCategoryManager(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error initializing category and pinned cache from SharedPreferences", e)
         }
     }
 
@@ -253,6 +264,7 @@ class HabayebCategoryManager(
     }
 
     companion object {
+        private const val TAG = "HabayebCategoryManager"
         const val PREFIX_CAT_LINK = "CAT_LINK_"
         private const val KEY_GLOBAL_ALL = "GLOBAL_ALL"
         private const val KEY_CLOSED_CUSTOM_NAME = "CLOSED_CUSTOM_NAME_KEY"

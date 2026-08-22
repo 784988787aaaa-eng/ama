@@ -27,10 +27,14 @@ android {
 
   signingConfigs {
     create("release") {
-      storeFile = file("mizan.keystore")
-      storePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").getOrElse("123456")
-      keyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").getOrElse("mizan")
-      keyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").getOrElse("123456")
+      val keystoreFile = file("mizan.keystore")
+      if (keystoreFile.exists()) {
+        storeFile = keystoreFile
+      }
+      // قراءة بيانات التوقيع من خصائص Gradle أو متغيرات البيئة دون قيم افتراضية غير آمنة
+      storePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").orNull
+      keyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orNull
+      keyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orNull
       enableV1Signing = true
       enableV2Signing = true
       enableV3Signing = true
@@ -49,8 +53,7 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      // توحيد البصمة محلياً لتفادي كود 10 أثناء وضع التجربة والتطوير
-      signingConfig = signingConfigs.getByName("release")
+      // فصل توقيع التطوير (Debug) عن الإنتاج (Release) للحفاظ على معايير الأمان
     }
   }
   packaging {

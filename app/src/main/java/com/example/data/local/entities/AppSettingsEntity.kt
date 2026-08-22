@@ -9,6 +9,14 @@ object DatabaseDefaults {
     const val DEFAULT_CURRENCY_SYMBOL = "ر.ي"
 }
 
+/**
+ * كيان إعدادات التطبيق وتكوينات النظام (App Settings Entity)
+ *
+ * التوثيق والحدود المعمارية:
+ * 1. جدول `app_settings` يحتوي على صف واحد فقط ذي المعرف الثابت (id = 1).
+ * 2. الحقول التاريخية (exchangeRateSar, exchangeRateUsd, exchangeRateYer) يتم الحفاظ عليها للتوافق التام مع الإصدارات السابقة وقواعد بيانات المستخدمين القديمة، بينما يعتمد النظام الحديث على `exchangeRatesJson` لإدارة مصفوفة أسعار الصرف غير المحدودة.
+ * 3. حقول الأمان (passcodeHash, recoveryPhraseHash, tempPart, permPart, unifiedDeviceId) تحفظ إعدادات الحماية والبصمة الرقمية المشفرة.
+ */
 @Entity(tableName = "app_settings")
 data class AppSettings(
     @PrimaryKey @ColumnInfo(name = "id") val id: Int = 1,

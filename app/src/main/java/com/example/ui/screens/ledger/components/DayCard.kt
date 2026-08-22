@@ -254,9 +254,10 @@ fun DayCard(
         }
     }
 
-    if (txIdToDelete != null) {
+    val currentTxToDelete = txIdToDelete
+    if (currentTxToDelete != null) {
         DayCardDeleteDialog(
-            txId = txIdToDelete!!,
+            txId = currentTxToDelete,
             onConfirm = { id ->
                 onDeleteTransaction(id)
                 txIdToDelete = null

@@ -8,6 +8,14 @@ import com.example.data.local.entities.HabayebCustomer
 import com.example.data.local.entities.HabayebTransaction
 import com.example.ui.helper.formatCurrency
 
+/**
+ * مساعد مشاركة كشوفات ومطالبات العملاء (Customer Statement Sharing Helper)
+ *
+ * المسؤوليات المعمارية:
+ * 1. صياغة وتنسيق رسائل المطالبات وكشوف الحسابات بطريقة مهنية واضحة مع إبراز العملات وأرقام الحسابات.
+ * 2. دعم التوافقية العالية لمشاركة الرسائل عبر مختلف أجهزة ومصنعي Android (SMS Intents & System Choosers).
+ * 3. عزل منطق المشاركة النصية خارج Composable لتحقيق فصل تام للمسؤوليات.
+ */
 object CustomerShareHelper {
 
     private fun sendSmsReliably(context: Context, rawPhone: String, body: String, fallbackChooserTitleId: Int) {

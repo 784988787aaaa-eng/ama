@@ -2,6 +2,7 @@ package com.example.ui.screens.ledger.components
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.example.R
 import com.example.data.local.entities.FixedCommitment
 import java.math.BigDecimal
@@ -16,7 +17,16 @@ private fun String.toWesternDigits(): String {
     return result
 }
 
+/**
+ * مساعد مشاركة الالتزامات المالية والمصروفات الثابتة (Commitments Sharing Helper)
+ *
+ * المسؤوليات المعمارية:
+ * 1. تلخيص مصفوفة الالتزامات المالية وحساب المبالغ المستهدفة والمتبقية بدقة (BigDecimal).
+ * 2. توفير مسار مشاركة مباشر مع WhatsApp مع تراجع فوري لمنظومة المشاركة العامة للنظام (Android Sharesheet).
+ */
 object CommitmentShareHelper {
+    private const val TAG = "CommitmentShareHelper"
+
     fun shareCommitments(
         context: Context,
         commitments: List<FixedCommitment>,
@@ -49,8 +59,12 @@ object CommitmentShareHelper {
             shareIntent.setPackage("com.whatsapp")
             context.startActivity(shareIntent)
         } catch (e: Exception) {
-            shareIntent.setPackage(null)
-            context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.ledger_share_via)))
+            try {
+                shareIntent.setPackage(null)
+                context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.ledger_share_via)))
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to launch share intent", t)
+            }
         }
     }
 }

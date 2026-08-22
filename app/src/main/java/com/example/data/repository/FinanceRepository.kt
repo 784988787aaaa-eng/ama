@@ -24,6 +24,11 @@ import java.io.File
 import java.math.BigDecimal
 import java.util.UUID
 
+/**
+ * المستودع المالي المركزي (FinanceRepository)
+ * يمثل نقطة الوصول المركزية لإدارة البيانات المالية وعمليات قاعدة البيانات Room
+ * وعمليات الحذف المؤقت (Trash) والاستعادة، مع الحفاظ على التوافق التام مع المعاملات والنسخ الاحتياطية.
+ */
 class FinanceRepository(internal val database: AppDatabase, private val context: Context) {
 
     companion object {
@@ -163,6 +168,7 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
     }
 
     // --- Trash & Soft Delete Delegation ---
+    suspend fun getAllDeletedItemsDirect(): List<DeletedItemEntity> = trashDao.getAllDeletedItemsDirect()
     suspend fun saveDeletedItem(item: DeletedItemEntity) = trashDao.insertDeletedItem(item)
     suspend fun removeDeletedItem(item: DeletedItemEntity) = trashDao.deleteItem(item)
     suspend fun removeDeletedItemById(id: String) = trashDao.deleteItemById(id)
@@ -268,10 +274,22 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
         }
     }
 
+    /**
+     * تنفيذ الاستعادة الشاملة للنسخة الاحتياطية (Transactional Master Restore)
+     *
+     * التسلسل المعماري الصارم:
+     * 1. التحليل والتحقق في الذاكرة أولاً (Parse & Validate in-memory).
+     * 2. التحقق من سلامة العلاقات (مثل روابط المعاملات linkedMainTxId وعلاقات العملاء).
+     * 3. بدء المعاملة الذرية لقاعدة البيانات (database.withTransaction).
+     * 4. تصفية جميع الجداول معاً (Clear all tables together within the atomic transaction).
+     * 5. إدراج جميع السجلات المستعادة وتحديث التفضيلات المزدوجة.
+     * 6. في حال حدوث أي استثناء، تتراجع المعاملة تلقائياً (Rollback) لمنع ترك قاعدة البيانات في حالة تالفة أو فارغة.
+     */
     suspend fun executeMasterRestore(rawJsonString: String): RestoreResult = withContext(Dispatchers.IO) {
         val root = JSONObject(rawJsonString)
         val currentLocalSettings = getSettingsDirect() ?: AppSettings()
         
+        // 1. مرحلة التحليل النحوي في الذاكرة
         val data = MzdBackupSerializer.importBackupFromJson(rawJsonString, context)
         val restoredSettingsUnmerged = data.first
         val restoredSettings = restoredSettingsUnmerged.copy(
@@ -295,12 +313,25 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
         val restoredCustomerData = MzdBackupSerializer.parseHabayebCustomers(root)
         val habayebTransactions = MzdBackupSerializer.parseHabayebTransactions(root, restoredSettings.currencySymbol)
 
+        // 2. مرحلة التحقق من سلامة العلاقات والهوية (Integrity & Relationship Validation)
+        val customerIdSet = restoredCustomerData.map { it.customer.id }.toSet()
+        val validatedHabayebTransactions = habayebTransactions.map { tx ->
+            val cleanLinkedId = tx.linkedMainTxId?.takeIf { it.isNotBlank() && it != tx.id && it != "0" && !it.equals("null", ignoreCase = true) }
+            val cleanCustomerId = if (customerIdSet.contains(tx.customerId)) tx.customerId else tx.customerId.trim()
+            tx.copy(customerId = cleanCustomerId, linkedMainTxId = cleanLinkedId)
+        }
+
+        // 3. المعاملة الذرية الشاملة لقاعدة البيانات
         database.withTransaction {
+            // أ. التصفية المتزامنة لكافة الجداول داخل المعاملة فقط
             clearTransactions()
             clearCommitments()
             clearCustomCategories()
             clearDeletedItems()
+            clearAllCustomers()
+            clearAllTransactions()
 
+            // ب. إدراج السجلات المستعادة
             saveSettings(restoredSettings)
             for (fc in restoredCommitments) {
                 saveCommitment(fc)
@@ -309,12 +340,12 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
                 saveTransaction(tx)
             }
 
-            // Restore Custom Categories
+            // استعادة الفئات المخصصة
             for (cat in customCategories) {
                 saveCustomCategory(cat)
             }
 
-            // Restore pin status and settings in dual SharedPreferences
+            // استعادة التفضيلات المشتركة وحالات التثبيت
             writeDualPreference { sharedEdit, financeEdit ->
                 if (root.has(JSON_PINNED_CUSTOMERS) && !root.isNull(JSON_PINNED_CUSTOMERS)) {
                     val pinnedObj = root.optJSONObject(JSON_PINNED_CUSTOMERS)
@@ -346,15 +377,12 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
                 }
             }
 
-            // Restore Deleted Items
+            // استعادة سلة المهملات
             for (item in deletedItems) {
                 saveDeletedItem(item)
             }
 
-            clearAllCustomers()
-            clearAllTransactions()
-
-            // Restore Habayeb Customers
+            // استعادة عملاء الحبايب والروابط
             for (custData in restoredCustomerData) {
                 insertCustomer(custData.customer)
                 custData.categoryLink?.let { catLink ->
@@ -365,8 +393,8 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
                 }
             }
 
-            // Restore Habayeb Transactions
-            for (tx in habayebTransactions) {
+            // استعادة معاملات الحبايب المحققة
+            for (tx in validatedHabayebTransactions) {
                 insertHabayebTransaction(tx)
             }
         }

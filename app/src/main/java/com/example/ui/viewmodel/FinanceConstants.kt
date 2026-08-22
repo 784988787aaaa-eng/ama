@@ -1,5 +1,13 @@
 package com.example.ui.viewmodel
 
+/**
+ * الثوابت المحاسبية والمفاتيح المشتركة لطبقة إدارة الأموال (Finance Contracts & Constants)
+ *
+ * التوثيق المعماري:
+ * 1. قيم `DEFAULT_CURRENCY_CODE` و `FALLBACK_CURRENCY_SYMBOL` تمثل العقود القياسية للنظام في حال غياب رمز العملة.
+ * 2. مفاتيح التفضيلات (`PREFS_NAME`, `KEY_ONBOARDING_SHOWN`, `KEY_LINK_HABAYEB_DEBTS`) ثابتة لضمان التوافقية العكسية.
+ * 3. قيم الأنواع والتكرار (`FREQ_DAILY`, `TYPE_OWED_BY_THEM`, الخ) تتطابق مع عقود قاعدة البيانات وسلسلة الـ JSON.
+ */
 object FinanceConstants {
     const val PREFS_NAME = "mizan_sec_prefs"
     const val KEY_ONBOARDING_SHOWN = "onboarding_shown"

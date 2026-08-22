@@ -14,6 +14,14 @@ import java.math.BigDecimal
 import java.util.Locale
 import org.json.JSONObject
 
+/**
+ * محلل ومحوّل عناصر سلة المحذوفات (Trash Item Parser & Deserializer)
+ *
+ * المسؤوليات المعمارية:
+ * 1. فك تشفير حزم المحذوفات JSON (Bundles) واستخراج الكيانات المالية (Customers, Transactions, Commitments).
+ * 2. الحفاظ الصارم على الدقة المالية (BigDecimal) ومنع تسرب أو تشويه أرقام المبالغ أو أسعار الصرف.
+ * 3. صياغة نماذج العرض المستقلة وغير القابلة للتغيير (@Immutable ParsedTrashData) لدعم أداء التمرير العالي في سلة المهملات.
+ */
 @androidx.compose.runtime.Immutable
 data class ParsedBundleTransaction(
     val id: String,

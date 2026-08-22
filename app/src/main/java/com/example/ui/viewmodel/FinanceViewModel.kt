@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.R
 import com.example.data.local.AppDatabase
 import com.example.data.local.NavigationPreferences
-import com.example.data.local.TrashDao
 import com.example.data.local.entities.AppSettings
 import com.example.data.local.entities.CustomCategory
 import com.example.data.local.entities.DeletedItemEntity
@@ -34,16 +33,20 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.util.Calendar
 import java.util.UUID
 
 import com.example.ui.viewmodel.ledger.DayLedger
 import com.example.ui.viewmodel.ledger.MonthLedger
 import com.example.ui.viewmodel.ledger.TrashRestoreHandler
 
-typealias MonthLedger = MonthLedger
-typealias DayLedger = DayLedger
+typealias MonthLedger = com.example.ui.viewmodel.ledger.MonthLedger
+typealias DayLedger = com.example.ui.viewmodel.ledger.DayLedger
 
+/**
+ * نموذج العرض المالي الرئيسي (FinanceViewModel)
+ * مسؤول عن تنسيق حالة الواجهة (UI Orchestration) وربط تفاعلات المستخدم مع المستودع المالي
+ * دون تخزين منطق محاسبي أو التعامل المباشر مع طبقة التخزين.
+ */
 class FinanceViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
@@ -55,7 +58,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private val repository: FinanceRepository
-    private val trashDao: TrashDao
 
     private val _autoCleanupPeriod = MutableStateFlow(CLEANUP_PERIOD_NEVER)
     val autoCleanupPeriod: StateFlow<String> = _autoCleanupPeriod.asStateFlow()
@@ -64,15 +66,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val uiEventFlow = _uiEventChannel.receiveAsFlow()
 
     private fun sendUiEvent(event: UiEvent) {
-        viewModelScope.launch {
-            _uiEventChannel.send(event)
-        }
+        _uiEventChannel.trySend(event)
     }
 
     init {
         val database = AppDatabase.getDatabase(application)
         repository = FinanceRepository(database, application)
-        trashDao = database.trashDao()
         val trashPrefs = application.getSharedPreferences(PREFS_TRASH, Context.MODE_PRIVATE)
         _autoCleanupPeriod.value = trashPrefs.getString(KEY_TRASH_AUTO_CLEANUP_PERIOD, CLEANUP_PERIOD_NEVER) ?: CLEANUP_PERIOD_NEVER
     }
@@ -170,10 +169,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     val dailyExpenseComparisonState: StateFlow<Pair<BigDecimal, BigDecimal>> = transactionsState
         .map { txList ->
-            val todayKey = DateUtils.formatDateFull(System.currentTimeMillis() / 1000)
-            val cal = Calendar.getInstance()
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            val yesterdayKey = DateUtils.formatDateFull(cal.timeInMillis / 1000)
+            val nowSec = System.currentTimeMillis() / 1000
+            val todayKey = DateUtils.formatDateFull(nowSec)
+            val yesterdayKey = DateUtils.formatDateFull(nowSec - 86400L)
 
             var todayExpenses = BigDecimal.ZERO
             var yesterdayExpenses = BigDecimal.ZERO
@@ -321,10 +319,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     val ageInMillis = com.example.TrashCleanupWorker.getPeriodDurationMillis(period)
                     if (ageInMillis > 0L) {
                         val thresholdTime = System.currentTimeMillis() - ageInMillis
-                        val items = trashDao.getAllDeletedItemsDirect()
+                        val items = repository.getAllDeletedItemsDirect()
                         val expiredItems = items.filter { it.deletedAt < thresholdTime }
                         expiredItems.forEach { item ->
-                            trashDao.deleteItem(item)
+                            repository.removeDeletedItem(item)
                         }
                     }
                 } catch (e: Exception) {
@@ -338,12 +336,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val systemHabayeb = getApplication<Application>().getString(R.string.source_system_habayeb)
-                val allItems = trashDao.getAllDeletedItemsDirect()
+                val allItems = repository.getAllDeletedItemsDirect()
                 val nonHabayebItems = allItems.filter {
                     it.sourceSystem != systemHabayeb && !it.originalTableName.startsWith(PREFIX_HABAYEB)
                 }
                 nonHabayebItems.forEach {
-                    trashDao.deleteItem(it)
+                    repository.removeDeletedItem(it)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -355,12 +353,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val systemHabayeb = getApplication<Application>().getString(R.string.source_system_habayeb)
-                val allItems = trashDao.getAllDeletedItemsDirect()
+                val allItems = repository.getAllDeletedItemsDirect()
                 val habayebItems = allItems.filter {
                     it.sourceSystem == systemHabayeb || it.originalTableName.startsWith(PREFIX_HABAYEB)
                 }
                 habayebItems.forEach {
-                    trashDao.deleteItem(it)
+                    repository.removeDeletedItem(it)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

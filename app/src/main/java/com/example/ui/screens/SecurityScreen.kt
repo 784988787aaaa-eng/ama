@@ -189,8 +189,8 @@ fun SecurityScreen(
                     currentSettings = currentSettings,
                     viewModel = viewModel,
                     onCopyRecoveryPhrase = {
-                        if (!currentSettings.recoveryPhraseHash.isNullOrBlank()) {
-                            clipboardManager.setText(AnnotatedString(currentSettings.recoveryPhraseHash!!))
+                        currentSettings.recoveryPhraseHash?.takeIf { it.isNotBlank() }?.let { phrase ->
+                            clipboardManager.setText(AnnotatedString(phrase))
                             Toast.makeText(context, context.getString(R.string.sec_toast_copied), Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -362,8 +362,8 @@ fun SecurityDialog(
                             currentSettings = currentSettings,
                             viewModel = viewModel,
                             onCopyRecoveryPhrase = {
-                                if (!currentSettings.recoveryPhraseHash.isNullOrBlank()) {
-                                    clipboardManager.setText(AnnotatedString(currentSettings.recoveryPhraseHash!!))
+                                currentSettings.recoveryPhraseHash?.takeIf { it.isNotBlank() }?.let { phrase ->
+                                    clipboardManager.setText(AnnotatedString(phrase))
                                     Toast.makeText(context, context.getString(R.string.sec_toast_copied), Toast.LENGTH_SHORT).show()
                                 }
                             },

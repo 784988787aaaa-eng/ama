@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -107,7 +108,7 @@ fun SecurityActivePanel(
             )
 
             if (viewModel.isBiometricSupported) {
-                val isBiometricEnabled by viewModel.isBiometricEnabled.collectAsState()
+                val isBiometricEnabled by viewModel.isBiometricEnabled.collectAsStateWithLifecycle()
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
@@ -218,9 +219,10 @@ fun SecurityActivePanel(
     }
 
     // Modal verification dialog requiring Old PIN or Recovery Phrase
-    if (pendingAction != null) {
+    val activePendingAction = pendingAction
+    if (activePendingAction != null) {
         VerifyOldPinDialog(
-            action = pendingAction!!,
+            action = activePendingAction,
             recoveryHint = currentSettings.recoveryHint,
             onVerify = { input ->
                 viewModel.verifyCredentials(input)

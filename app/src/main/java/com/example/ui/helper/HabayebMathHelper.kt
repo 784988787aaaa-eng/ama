@@ -5,22 +5,35 @@ import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 
+/**
+ * مساعد العمليات الحسابية والتقريب المالي لحبايب (Habayeb Mathematical & Formatting Helper)
+ *
+ * المسؤوليات المعمارية:
+ * 1. الدقة الحسابية الإلزامية: استخدام BigDecimal حصراً مع التقريب المصرفي (HALF_EVEN) لمنع تراكم أخطاء الفاصلة العائمة.
+ * 2. أمان الخيوط: استخدام ThreadLocal لـ NumberFormat لتفادي تسريب الذاكرة ومشاكل التزامن عند تعدد خيوط العرض.
+ * 3. التنسيق الذكي: إزالة الأصفار الزائدة على يمين الفاصلة مع الحفاظ على وضوح وقراءة الأرقام الكبيرة.
+ */
 object HabayebMathHelper {
     private val numberFormatThreadLocal = ThreadLocal.withInitial {
         NumberFormat.getNumberInstance(Locale.US)
     }
 
     fun toBigDecimal(value: Double): BigDecimal {
-        return try {
-            BigDecimal.valueOf(value)
-        } catch (e: Exception) {
+        return if (value.isNaN() || value.isInfinite()) {
             BigDecimal.ZERO
+        } else {
+            try {
+                BigDecimal.valueOf(value)
+            } catch (e: Exception) {
+                BigDecimal.ZERO
+            }
         }
     }
 
     fun toBigDecimal(value: String): BigDecimal {
         return try {
-            BigDecimal(value)
+            val clean = value.trim()
+            if (clean.isBlank() || clean.equals("null", ignoreCase = true)) BigDecimal.ZERO else BigDecimal(clean)
         } catch (e: Exception) {
             BigDecimal.ZERO
         }

@@ -15,6 +15,14 @@ import com.example.data.local.entities.TransactionDb
 
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+/**
+ * قاعدة البيانات الرئيسية لميزان الدار (Mizan Al-Dar Room AppDatabase)
+ *
+ * المبادئ والمعايير المعمارية الحاكمة:
+ * 1. تاريخ المستخدمين غير قابل للمس: مخطط قاعدة البيانات (Schema) والهجرات المنشورة (Migrations 1 to 31) تمثل تاريخاً حقيقياً وموثوقاً لبيانات المستخدمين على أجهزتهم؛ لذا يُمنع منعاً باتاً تعديل أي Migration سابقة أو حذف أي جدول/عمود تاريخي.
+ * 2. وضع الكتابة المسبقة للتدوين (WAL Mode): يتم تفعيل JournalMode.WRITE_AHEAD_LOGGING لتسريع عمليات القراءة المتزامنة دون حظر خيوط الكتابة.
+ * 3. صيانة العلاقات والروابط المعلقة (Consistency Callbacks): عند فتح قاعدة البيانات يتم تنظيف روابط المعاملات غير الصالحة لضمان اتساق دفتر اليومية مع الحبايب دون التأثير على السجلات الأصلية.
+ */
 @Database(
     entities = [
         AppSettings::class,

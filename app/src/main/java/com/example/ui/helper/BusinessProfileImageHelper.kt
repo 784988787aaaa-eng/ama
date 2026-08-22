@@ -10,10 +10,21 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.net.Uri
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 
+/**
+ * مساعد معالجة وقص وتحجيم صور الهوية والأنشطة التجارية (Business Profile Image Processor)
+ *
+ * المسؤوليات المعمارية:
+ * 1. قراءة وضبط أحجام الصور بأمان دون التسبب في أخطاء نفاد الذاكرة (Out of Memory prevention via inSampleSize).
+ * 2. معالجة تدوير الصورة التلقائي وفق زاوية الكاميرا (EXIF Orientation).
+ * 3. اقتصاص مخصص دائري ومربع مع تطبيق عمليات الرسم والتحويل الهندسي بدقة.
+ * 4. إدارة دورة حياة كائنات الـ Bitmap وتفريغ الذاكرة (Recycling) بأمان.
+ */
 object BusinessProfileImageHelper {
+    private const val TAG = "BusinessProfileImageHelper"
 
     fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
         return try {
@@ -45,7 +56,7 @@ object BusinessProfileImageHelper {
             }
             bitmap
         } catch (t: Throwable) {
-            t.printStackTrace()
+            Log.e(TAG, "Failed to load bitmap from uri: $uri", t)
             null
         }
     }
@@ -72,7 +83,7 @@ object BusinessProfileImageHelper {
             val matrix = Matrix().apply { postRotate(degrees) }
             Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         } catch (t: Throwable) {
-            t.printStackTrace()
+            Log.e(TAG, "Failed to rotate bitmap safely", t)
             bitmap
         }
     }
@@ -139,7 +150,7 @@ object BusinessProfileImageHelper {
             }
             output
         } catch (t: Throwable) {
-            t.printStackTrace()
+            Log.e(TAG, "Failed to crop bitmap with transform", t)
             bitmap
         }
     }
@@ -160,7 +171,7 @@ object BusinessProfileImageHelper {
             }
             Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
         } catch (t: Throwable) {
-            t.printStackTrace()
+            Log.e(TAG, "Failed to scale bitmap safely", t)
             bitmap
         }
     }
@@ -177,7 +188,7 @@ object BusinessProfileImageHelper {
             }
             file.absolutePath
         } catch (t: Throwable) {
-            t.printStackTrace()
+            Log.e(TAG, "Failed to save business logo to internal storage", t)
             null
         }
     }
