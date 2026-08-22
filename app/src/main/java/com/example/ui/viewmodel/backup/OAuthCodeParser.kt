@@ -11,7 +11,9 @@ object OAuthCodeParser {
             try {
                 val parsedUri = Uri.parse(trimmed)
                 extracted = parsedUri.getQueryParameter("code") ?: ""
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                // Fall back to the manual query-string parser below.
+            }
             if (extracted.isEmpty()) {
                 val idx = trimmed.indexOf("code=")
                 if (idx != -1) {

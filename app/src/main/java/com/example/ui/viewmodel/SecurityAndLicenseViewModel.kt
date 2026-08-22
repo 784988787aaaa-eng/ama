@@ -274,8 +274,8 @@ class SecurityAndLicenseViewModel(application: Application) : AndroidViewModel(a
         return try {
             val hashed = HashUtils.hashString(String(inputChars))
             val settings = settingsState.value
-            (settings.passcodeHash != null && DatabaseSecurityGuard.secureEqual(hashed, settings.passcodeHash)) ||
-                    (settings.recoveryPhraseHash != null && DatabaseSecurityGuard.secureEqual(hashed, settings.recoveryPhraseHash))
+            (settings.passcodeHash != null && HashUtils.secureEquals(hashed, settings.passcodeHash)) ||
+                    (settings.recoveryPhraseHash != null && HashUtils.secureEquals(hashed, settings.recoveryPhraseHash))
         } catch (t: Throwable) {
             Log.e("SecurityAndLicenseVM", "Error verifying credentials", t)
             false

@@ -24,7 +24,7 @@ data class AppSettings(
     @ColumnInfo(name = "permPart") val permPart: String = "",
     @ColumnInfo(name = "unifiedDeviceId") val unifiedDeviceId: String = "",
     @ColumnInfo(name = "isFirstLaunch") val isFirstLaunch: Boolean = true,
-    @ColumnInfo(name = "isAutoBackupEnabled") val isAutoBackupEnabled: Boolean = true,
+    @ColumnInfo(name = "isAutoBackupEnabled") val isAutoBackupEnabled: Boolean = false,
     @ColumnInfo(name = "isCloudSyncEnabled") val isCloudSyncEnabled: Boolean = false,
     @ColumnInfo(name = "exchangeRateSar") val exchangeRateSar: Double = 1.0,
     @ColumnInfo(name = "exchangeRateUsd") val exchangeRateUsd: Double = 1.0,

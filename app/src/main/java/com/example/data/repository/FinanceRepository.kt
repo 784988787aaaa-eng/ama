@@ -14,6 +14,8 @@ import com.example.data.local.entities.HabayebCustomer
 import com.example.data.local.entities.HabayebTransaction
 import com.example.data.local.entities.TransactionDb
 import com.example.data.serialization.MzdBackupSerializer
+import com.example.data.serialization.BackupPayloadData
+import com.example.data.serialization.BackupPayloadSerializer
 import com.example.domain.model.TransactionType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import android.util.Base64
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -295,6 +298,43 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
         val restoredCustomerData = MzdBackupSerializer.parseHabayebCustomers(root)
         val habayebTransactions = MzdBackupSerializer.parseHabayebTransactions(root, restoredSettings.currencySymbol)
 
+        // Integrity verification MUST happen before the first destructive DB operation.
+        // Legacy backups without the versioned hash remain restorable for compatibility,
+        // but new backups are rejected if their canonical logical content was modified.
+        // Parse the profile once and reuse the immutable snapshot for integrity verification.
+        // Re-parsing the same JSON four times is unnecessary and made it easier for future
+        // changes to accidentally use slightly different interpretations of the profile.
+        val restoredBusinessProfile = BackupPayloadSerializer.parseBusinessProfile(root)
+
+        verifyBackupIntegrityIfVersioned(
+            root = root,
+            data = BackupPayloadData(
+                settings = restoredSettingsUnmerged,
+                commitments = restoredCommitments,
+                transactions = restoredTransactions,
+                habayebCustomers = restoredCustomerData.map { it.customer },
+                habayebTransactions = habayebTransactions,
+                deletedItems = deletedItems,
+                customCategories = customCategories,
+                categoryLinks = restoredCustomerData.mapNotNull { data ->
+                    data.categoryLink?.let { data.customer.id to it }
+                }.toMap(),
+                pinnedCustomerIdsByCategory = parsePinnedCustomerIds(root),
+                categoryOrderList = root.optStringOrNull(JSON_CATEGORY_ORDER_LIST),
+                closedCustomName = root.optStringOrNull(JSON_CLOSED_CUSTOM_NAME),
+                businessName = restoredBusinessProfile.name,
+                businessDescription = restoredBusinessProfile.description,
+                businessPhones = restoredBusinessProfile.phones,
+                businessLogoBase64 = restoredBusinessProfile.logoBase64
+            )
+        )
+
+        validateRestoreIntegrity(
+            restoredCustomerData.map { it.customer },
+            habayebTransactions,
+            restoredTransactions
+        )
+
         database.withTransaction {
             clearTransactions()
             clearCommitments()
@@ -314,38 +354,6 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
                 saveCustomCategory(cat)
             }
 
-            // Restore pin status and settings in dual SharedPreferences
-            writeDualPreference { sharedEdit, financeEdit ->
-                if (root.has(JSON_PINNED_CUSTOMERS) && !root.isNull(JSON_PINNED_CUSTOMERS)) {
-                    val pinnedObj = root.optJSONObject(JSON_PINNED_CUSTOMERS)
-                    if (pinnedObj != null) {
-                        val keys = pinnedObj.keys()
-                        while (keys.hasNext()) {
-                            val catKey = keys.next()
-                            val arr = pinnedObj.getJSONArray(catKey)
-                            val set = mutableSetOf<String>()
-                            for (i in 0 until arr.length()) {
-                                set.add(arr.getString(i))
-                            }
-                            val prefKey = "$PREF_KEY_PINNED_PREFIX$catKey"
-                            sharedEdit.putStringSet(prefKey, set)
-                            financeEdit.putStringSet(prefKey, set)
-                        }
-                    }
-                }
-
-                if (root.has(JSON_CATEGORY_ORDER_LIST) && !root.isNull(JSON_CATEGORY_ORDER_LIST)) {
-                    val catOrder = root.getString(JSON_CATEGORY_ORDER_LIST)
-                    sharedEdit.putString(PREF_CATEGORY_ORDER_LIST_KEY, catOrder)
-                    financeEdit.putString(PREF_CATEGORY_ORDER_LIST_KEY, catOrder)
-                }
-                if (root.has(JSON_CLOSED_CUSTOM_NAME) && !root.isNull(JSON_CLOSED_CUSTOM_NAME)) {
-                    val closedCustomName = root.getString(JSON_CLOSED_CUSTOM_NAME)
-                    sharedEdit.putString(PREF_CLOSED_CUSTOM_NAME_KEY, closedCustomName)
-                    financeEdit.putString(PREF_CLOSED_CUSTOM_NAME_KEY, closedCustomName)
-                }
-            }
-
             // Restore Deleted Items
             for (item in deletedItems) {
                 saveDeletedItem(item)
@@ -354,15 +362,11 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
             clearAllCustomers()
             clearAllTransactions()
 
-            // Restore Habayeb Customers
+            // Restore Habayeb Customers. Category-link preferences are applied after the
+            // database transaction so a DB rollback cannot leave a partially restored
+            // preference set behind.
             for (custData in restoredCustomerData) {
                 insertCustomer(custData.customer)
-                custData.categoryLink?.let { catLink ->
-                    writeDualPreference { sharedEdit, financeEdit ->
-                        sharedEdit.putString("$PREF_CAT_LINK_PREFIX${custData.customer.id}", catLink)
-                        financeEdit.putString("$PREF_CAT_LINK_PREFIX${custData.customer.id}", catLink)
-                    }
-                }
             }
 
             // Restore Habayeb Transactions
@@ -371,8 +375,260 @@ class FinanceRepository(internal val database: AppDatabase, private val context:
             }
         }
 
+        // SharedPreferences are not part of Room's transaction. Rebuild the restore-owned
+        // preference namespace only after the DB transaction succeeds, and clear stale keys
+        // that are absent from the backup. Without this replacement step, restoring a backup
+        // with fewer pins/category-links could silently retain values from the previous device state.
+        restoreOwnedPreferences(root, restoredCustomerData)
+        restoreBusinessProfile(restoredBusinessProfile, root.has("business_profile"))
+
         val isLegacy = root.has(JSON_MIZAN_AL_DAR_DB) || root.has(JSON_HABAYEB_DEBTS_DB)
         RestoreResult(restoredSettings, isLegacy)
+    }
+
+    private fun restoreOwnedPreferences(
+        root: JSONObject,
+        restoredCustomerData: List<MzdBackupSerializer.RestoredHabayebCustomerData>
+    ) {
+        val pinnedByCategory = parsePinnedCustomerIds(root)
+        val categoryOrder = root.optStringOrNull(JSON_CATEGORY_ORDER_LIST)
+        val closedCustomName = root.optStringOrNull(JSON_CLOSED_CUSTOM_NAME)
+
+        writeDualPreference { sharedEdit, financeEdit ->
+            fun clearRestoreOwnedKeys(prefs: SharedPreferences.Editor, current: Map<String, *>) {
+                current.keys
+                    .filter { it.startsWith(PREF_CAT_LINK_PREFIX) || it.startsWith(PREF_KEY_PINNED_PREFIX) }
+                    .forEach(prefs::remove)
+                prefs.remove(PREF_CATEGORY_ORDER_LIST_KEY)
+                prefs.remove(PREF_CLOSED_CUSTOM_NAME_KEY)
+            }
+
+            val sharedCurrent = context.getSharedPreferences(PREFS_MIZAN_SEC, Context.MODE_PRIVATE).all
+            val financeCurrent = context.getSharedPreferences(PREFS_MIZAN_FINANCE, Context.MODE_PRIVATE).all
+            clearRestoreOwnedKeys(sharedEdit, sharedCurrent)
+            clearRestoreOwnedKeys(financeEdit, financeCurrent)
+
+            pinnedByCategory.forEach { (category, ids) ->
+                val prefKey = "$PREF_KEY_PINNED_PREFIX$category"
+                sharedEdit.putStringSet(prefKey, ids)
+                financeEdit.putStringSet(prefKey, ids)
+            }
+
+            if (categoryOrder != null) {
+                sharedEdit.putString(PREF_CATEGORY_ORDER_LIST_KEY, categoryOrder)
+                financeEdit.putString(PREF_CATEGORY_ORDER_LIST_KEY, categoryOrder)
+            }
+            if (closedCustomName != null) {
+                sharedEdit.putString(PREF_CLOSED_CUSTOM_NAME_KEY, closedCustomName)
+                financeEdit.putString(PREF_CLOSED_CUSTOM_NAME_KEY, closedCustomName)
+            }
+
+            restoredCustomerData.forEach { custData ->
+                custData.categoryLink?.let { link ->
+                    val prefKey = "$PREF_CAT_LINK_PREFIX${custData.customer.id}"
+                    sharedEdit.putString(prefKey, link)
+                    financeEdit.putString(prefKey, link)
+                }
+            }
+        }
+    }
+
+    private fun restoreBusinessProfile(
+        profile: BackupPayloadSerializer.BusinessProfileBackupData,
+        presentInBackup: Boolean
+    ) {
+        // Old backups do not contain Business Profile; preserve the current device
+        // profile for backward compatibility. Current backups contain the object even
+        // when the user has no profile configured.
+        if (!presentInBackup) return
+
+        val prefs = context.getSharedPreferences("business_profile", Context.MODE_PRIVATE)
+        val altPrefs = context.getSharedPreferences("business_profile_prefs", Context.MODE_PRIVATE)
+        val targetLogo = File(context.filesDir, "business_logo.png")
+        val stagedLogo = File(context.filesDir, "business_logo.restore.tmp")
+        val oldLogoBackup = File(context.filesDir, "business_logo.previous.tmp")
+
+        stagedLogo.delete()
+        oldLogoBackup.delete()
+        val originalPrefs = prefs.all.toMap()
+        val originalAltPrefs = altPrefs.all.toMap()
+
+        // Stage all file changes first. Do not destroy the current logo until the
+        // replacement is fully decoded and written. Keep a rollback copy until both
+        // preference namespaces have been durably committed.
+        if (profile.logoBase64 != null) {
+            runCatching {
+                val bytes = Base64.decode(profile.logoBase64, Base64.DEFAULT)
+                require(bytes.isNotEmpty()) { "Business profile logo is empty" }
+                stagedLogo.outputStream().use { it.write(bytes) }
+                require(stagedLogo.length() > 0) { "Business profile logo is empty" }
+            }.getOrElse { failure ->
+                stagedLogo.delete()
+                throw IllegalArgumentException(
+                    "Business profile logo could not be prepared",
+                    failure
+                )
+            }
+        }
+
+        if (targetLogo.exists()) {
+            require(targetLogo.renameTo(oldLogoBackup)) {
+                "Could not stage the existing business logo"
+            }
+        }
+
+        fun restorePreferenceSnapshot(target: SharedPreferences, snapshot: Map<String, *>) {
+            val editor = target.edit().clear()
+            snapshot.forEach { (key, value) ->
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                }
+            }
+            check(editor.commit()) { "Failed to roll back Business Profile preferences" }
+        }
+
+        fun rollbackLogoAndPreferences() {
+            stagedLogo.delete()
+            targetLogo.delete()
+            if (oldLogoBackup.exists()) oldLogoBackup.renameTo(targetLogo)
+            restorePreferenceSnapshot(prefs, originalPrefs)
+            restorePreferenceSnapshot(altPrefs, originalAltPrefs)
+        }
+
+        try {
+            if (profile.logoBase64 != null) {
+                require(stagedLogo.renameTo(targetLogo)) {
+                    "Could not install restored business logo"
+                }
+            }
+
+            // commit() is intentional here: Business Profile is user-owned restore state
+            // and must be durably written before this restore step is considered complete.
+            check(
+                prefs.edit().clear()
+                    .putString("biz_name", profile.name.orEmpty())
+                    .putString("biz_desc", profile.description.orEmpty())
+                    .putString("biz_phones", org.json.JSONArray(profile.phones).toString())
+                    .apply {
+                        if (profile.logoBase64 != null) putString("biz_logo_path", targetLogo.absolutePath)
+                        else remove("biz_logo_path")
+                    }
+                    .commit()
+            ) { "Failed to persist restored Business Profile" }
+
+            // Keep the legacy preference namespace synchronized so older readers and the
+            // PDF loader's fallback path see the same restored user-owned profile.
+            check(
+                altPrefs.edit().clear()
+                    .putString("business_name", profile.name.orEmpty())
+                    .putString("business_slogan", profile.description.orEmpty())
+                    .putString("business_phone", profile.phones.firstOrNull().orEmpty())
+                    .apply {
+                        if (profile.logoBase64 != null) putString("logo_path", targetLogo.absolutePath)
+                        else remove("logo_path")
+                    }
+                    .commit()
+            ) { "Failed to persist legacy Business Profile preferences" }
+
+            // Only now is it safe to discard the previous logo.
+            oldLogoBackup.delete()
+        } catch (failure: Throwable) {
+            // Restore both the file and preference namespaces to their pre-restore values.
+            // This makes the Business Profile step itself failure-safe even though it is
+            // outside Room's transaction.
+            rollbackLogoAndPreferences()
+            throw IllegalArgumentException(
+                "Business Profile could not be restored completely",
+                failure
+            )
+        }
+    }
+
+    private fun verifyBackupIntegrityIfVersioned(root: JSONObject, data: BackupPayloadData) {
+        val metadata = root.optJSONObject("metadata") ?: return
+        val version = metadata.optInt("security_hash_version", 0)
+        if (version == 0) return // Legacy/unversioned backup: preserve backward compatibility.
+        require(version == 2 || version == BackupPayloadSerializer.CURRENT_SECURITY_HASH_VERSION) {
+            "Unsupported backup integrity hash version: $version"
+        }
+        require(BackupPayloadSerializer.verifyIntegrityHash(root, data)) {
+            "Backup integrity verification failed: the payload was modified or is incomplete"
+        }
+    }
+
+    private fun parsePinnedCustomerIds(root: JSONObject): Map<String, Set<String>> {
+        val result = mutableMapOf<String, Set<String>>()
+        val pinnedObj = root.optJSONObject(JSON_PINNED_CUSTOMERS) ?: return result
+        val keys = pinnedObj.keys()
+        while (keys.hasNext()) {
+            val category = keys.next()
+            val arr = pinnedObj.optJSONArray(category) ?: continue
+            val ids = linkedSetOf<String>()
+            for (i in 0 until arr.length()) ids.add(arr.getString(i))
+            result[category] = ids
+        }
+        return result
+    }
+
+    private fun JSONObject.optStringOrNull(key: String): String? =
+        if (!has(key) || isNull(key)) null else optString(key, null)
+
+    /**
+     * Rejects structurally inconsistent restore payloads before any destructive
+     * database operation begins. Foreign-key constraints protect customerId,
+     * but linkedMainTxId is intentionally a soft relationship and therefore
+     * needs explicit validation.
+     */
+    private fun validateRestoreIntegrity(
+        customers: List<HabayebCustomer>,
+        habayebTransactions: List<HabayebTransaction>,
+        transactions: List<TransactionDb>
+    ) {
+        fun requireUniqueIds(ids: List<String>, label: String) {
+            val duplicates = ids.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+            require(duplicates.isEmpty()) {
+                "Backup contains duplicate $label IDs: ${duplicates.take(10)}"
+            }
+        }
+
+        requireUniqueIds(customers.map { it.id }, "customer")
+        requireUniqueIds(habayebTransactions.map { it.id }, "Habayeb transaction")
+        requireUniqueIds(transactions.map { it.id }, "transaction")
+
+        val customerIds = customers.map { it.id }.toHashSet()
+        val txIds = habayebTransactions.map { it.id }.toHashSet()
+
+        val missingCustomers = habayebTransactions
+            .asSequence()
+            .filter { it.customerId !in customerIds }
+            .map { it.id to it.customerId }
+            .take(10)
+            .toList()
+        require(missingCustomers.isEmpty()) {
+            "Backup contains transactions referencing missing customers: $missingCustomers"
+        }
+
+        val badLinks = habayebTransactions
+            .asSequence()
+            .mapNotNull { tx ->
+                val link = tx.linkedMainTxId?.trim()?.takeIf { it.isNotEmpty() }
+                when {
+                    link == null -> null
+                    link == tx.id -> tx.id to "self-link"
+                    link !in txIds -> tx.id to link
+                    else -> null
+                }
+            }
+            .take(10)
+            .toList()
+        require(badLinks.isEmpty()) {
+            "Backup contains dangling/invalid linkedMainTxId references: $badLinks"
+        }
     }
 
     suspend fun restoreDeletedItem(item: DeletedItemEntity) = withContext(Dispatchers.IO) {

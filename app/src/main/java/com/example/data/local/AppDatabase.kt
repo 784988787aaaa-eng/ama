@@ -65,6 +65,10 @@ abstract class AppDatabase : RoomDatabase() {
                                       OR LOWER(TRIM(linkedMainTxId)) = 'null' 
                                       OR TRIM(linkedMainTxId) = '0' 
                                       OR linkedMainTxId = id
+                                      OR NOT EXISTS (
+                                          SELECT 1 FROM habayeb_transactions parent
+                                          WHERE parent.id = TRIM(linkedMainTxId)
+                                      )
                                   )
                             """)
                         } catch (e: Exception) {

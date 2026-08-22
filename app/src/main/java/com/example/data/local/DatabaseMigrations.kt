@@ -385,7 +385,7 @@ object DatabaseMigrations {
             val permPartCol = if (existingColumns.contains("permPart")) "permPart" else "''"
             val unifiedDeviceIdCol = if (existingColumns.contains("unifiedDeviceId")) "unifiedDeviceId" else "''"
             val isFirstLaunchCol = if (existingColumns.contains("isFirstLaunch")) "isFirstLaunch" else "1"
-            val isAutoBackupCol = if (existingColumns.contains("isAutoBackupEnabled")) "isAutoBackupEnabled" else "1"
+            val isAutoBackupCol = if (existingColumns.contains("isAutoBackupEnabled")) "isAutoBackupEnabled" else "0"
             val isCloudSyncCol = if (existingColumns.contains("isCloudSyncEnabled")) "isCloudSyncEnabled" else "0"
             val rateSarCol = if (existingColumns.contains("exchangeRateSar")) "exchangeRateSar" else "1.0"
             val rateUsdCol = if (existingColumns.contains("exchangeRateUsd")) "exchangeRateUsd" else "1.0"

@@ -170,7 +170,7 @@ fun AddTransactionPopup(
             val hasStoredRate = ExchangeRateHelper.hasRate(settings.exchangeRatesJson, currencySymbol, selectedTransactionCurrency)
             val currentRateVal = ExchangeRateHelper.getRate(settings.exchangeRatesJson, currencySymbol, selectedTransactionCurrency)
 
-            if (isForeignSelected && applyExchangeRate && (!hasStoredRate || currentRateVal == 1.0)) {
+            if (isForeignSelected && applyExchangeRate && (!hasStoredRate)) {
                 tempRateStr = ""
                 showRateSetupOverlay = true
                 isSaving = false

@@ -9,7 +9,6 @@ import com.example.data.local.entities.HabayebTransaction
 import com.example.data.serialization.excel.AllCustomersExcelEngine
 import com.example.data.serialization.excel.ExcelShareHelper
 import com.example.data.serialization.excel.SingleCustomerExcelEngine
-import com.example.data.serialization.excel.XlsxOpenXmlBuilder
 import com.example.ui.state.CustomerUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,17 +37,6 @@ object CsvReportGenerator {
                 return values().find { it.name.equals(action, ignoreCase = true) } ?: SHARE
             }
         }
-    }
-
-    /**
-     * Backward-compatible delegation wrapper for OpenXML xlsx builder components.
-     */
-    object XlsxHelper {
-        class SheetColumn(val min: Int, val max: Int, val width: Double)
-        class MergeRange(val ref: String)
-
-        fun getCellRef(colIndex: Int, rowIndex: Int): String =
-            XlsxOpenXmlBuilder.getCellRef(colIndex, rowIndex)
     }
 
     fun generateAndShareCsvReport(

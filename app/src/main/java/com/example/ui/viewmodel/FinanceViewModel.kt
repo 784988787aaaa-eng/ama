@@ -77,25 +77,11 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         _autoCleanupPeriod.value = trashPrefs.getString(KEY_TRASH_AUTO_CLEANUP_PERIOD, CLEANUP_PERIOD_NEVER) ?: CLEANUP_PERIOD_NEVER
     }
 
-    private val navigationPrefs = NavigationPreferences(application)
-
-    val tabOrderState: StateFlow<String> = navigationPrefs.tabOrderFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPreferences.DEFAULT_ORDER)
+    private val navigationPrefs = NavigationPreferences()
 
     val defaultStartDestinationState: StateFlow<String> = navigationPrefs.defaultStartFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPreferences.DEFAULT_START)
 
-    fun saveTabOrder(order: String) {
-        viewModelScope.launch {
-            navigationPrefs.saveTabOrder(order)
-        }
-    }
-
-    fun saveDefaultStart(start: String) {
-        viewModelScope.launch {
-            navigationPrefs.saveDefaultStart(start)
-        }
-    }
 
     val isSettingsLoaded = MutableStateFlow(false)
 

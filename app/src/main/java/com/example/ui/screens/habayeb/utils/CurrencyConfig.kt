@@ -138,15 +138,22 @@ object CurrencyConfig {
         }
     }
 
+    /**
+     * Converts using a directed CurrencyPair rate. The rate always means
+     * "units of target/base output currency per one unit of source/foreign currency".
+     */
     fun convertWithCurrencyPair(
         amount: BigDecimal,
         currencyPair: com.example.domain.model.CurrencyPair
     ): BigDecimal {
+        if (!currencyPair.isValid && !currencyPair.isSelfPair) {
+            throw IllegalArgumentException("Invalid exchange rate for ${currencyPair.baseCurrency}/${currencyPair.targetCurrency}")
+        }
         return convertAmountBigDecimal(
             amount = amount,
             baseCurrencySymbol = currencyPair.baseCurrency,
             foreignCurrencySymbol = currencyPair.targetCurrency,
-            rate = currencyPair.safeRate
+            rate = currencyPair.rate
         )
     }
 
@@ -161,47 +168,27 @@ object CurrencyConfig {
         if (baseNorm == foreignNorm) {
             return amount.setScale(4, RoundingMode.HALF_EVEN)
         }
-        val finalRate = if (rate <= BigDecimal.ZERO) BigDecimal.ONE else rate.setScale(4, RoundingMode.HALF_EVEN)
-        val baseRank = getCurrencyRank(baseNorm)
-        val foreignRank = getCurrencyRank(foreignNorm)
-
-        return if (baseRank < foreignRank) {
-            amount.multiply(finalRate, MathContext.DECIMAL128).setScale(4, RoundingMode.HALF_EVEN)
-        } else {
-            if (finalRate.compareTo(BigDecimal.ZERO) == 0) {
-                amount.setScale(4, RoundingMode.HALF_EVEN)
-            } else {
-                amount.divide(finalRate, 4, RoundingMode.HALF_EVEN)
-            }
+        require(rate > BigDecimal.ZERO) {
+            "Exchange rate must be greater than zero for $foreignNorm -> $baseNorm"
         }
+        return amount.multiply(rate, MathContext.DECIMAL128).setScale(4, RoundingMode.HALF_EVEN)
     }
 
+    /** Legacy Double API retained for callers; rate is still directed. */
     fun convertAmount(
         amount: Double,
         baseCurrencySymbol: String,
         foreignCurrencySymbol: String,
         rate: Double
     ): Double {
-        if (baseCurrencySymbol == foreignCurrencySymbol) {
-            return amount
+        if (baseCurrencySymbol == foreignCurrencySymbol) return amount
+        require(rate > 0.0) {
+            "Exchange rate must be greater than zero for $foreignCurrencySymbol -> $baseCurrencySymbol"
         }
-        val finalRate = if (rate <= 0.0) 1.0 else rate
-        val baseRank = getCurrencyRank(baseCurrencySymbol)
-        val foreignRank = getCurrencyRank(foreignCurrencySymbol)
-
-        return try {
-            val amountBD = BigDecimal.valueOf(amount)
-            val rateBD = BigDecimal.valueOf(finalRate)
-            if (baseRank < foreignRank) {
-                amountBD.multiply(rateBD, MathContext.DECIMAL128).setScale(4, RoundingMode.HALF_EVEN).toDouble()
-            } else {
-                if (rateBD.compareTo(BigDecimal.ZERO) == 0) amount
-                else amountBD.divide(rateBD, 4, RoundingMode.HALF_EVEN).toDouble()
-            }
-        } catch (e: Exception) {
-            if (baseRank < foreignRank) amount * finalRate
-            else if (finalRate != 0.0) amount / finalRate else amount
-        }
+        return BigDecimal.valueOf(amount)
+            .multiply(BigDecimal.valueOf(rate), MathContext.DECIMAL128)
+            .setScale(4, RoundingMode.HALF_EVEN)
+            .toDouble()
     }
 
     /**

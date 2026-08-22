@@ -22,7 +22,6 @@ import java.math.BigDecimal
 
 sealed interface LedgerUiEvent {
     object ScrollToTop : LedgerUiEvent
-    data class ScrollToRecord(val recordId: String) : LedgerUiEvent
 }
 
 /**

@@ -92,7 +92,7 @@ fun CurrencySettingsDialog(
     val currentRateValue = ExchangeRateHelper.getRate(localExchangeRatesJson, localDefaultCurrency, selectedTargetCurrency)
 
     var rateInputStr by remember(localDefaultCurrency, selectedTargetCurrency) {
-        mutableStateOf(if (currentRateValue > 0.0 && currentRateValue != 1.0) HabayebMathHelper.formatRate(currentRateValue) else "")
+        mutableStateOf(if (currentRateValue > 0.0) HabayebMathHelper.formatRate(currentRateValue) else "")
     }
 
     val rateFocusRequester = remember { FocusRequester() }

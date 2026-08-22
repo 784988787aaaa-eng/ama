@@ -79,7 +79,7 @@ object AddCustomerSaveHelper {
             val settings = viewModel.settingsState.value
             val hasStoredRate = ExchangeRateHelper.hasRate(settings.exchangeRatesJson, currencySymbol, selectedTransactionCurrency)
             val currentRateVal = ExchangeRateHelper.getRate(settings.exchangeRatesJson, currencySymbol, selectedTransactionCurrency)
-            if (!hasStoredRate || currentRateVal == 1.0) {
+            if (!hasStoredRate) {
                 onShowRateSetup("")
                 return
             }

@@ -244,8 +244,3 @@ class GoogleDriveSyncHelper(private val context: Context) {
     }
 }
 
-object GoogleDriveHelper {
-    suspend fun disconnectAndSignOut(context: Context) {
-        GoogleDriveSyncHelper.disconnectAndSignOut(context)
-    }
-}

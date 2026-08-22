@@ -83,18 +83,19 @@ object TrashItemParser {
     }
 
     fun parseBigDecimal(obj: JSONObject, key: String, fallback: String = "0"): BigDecimal {
-        if (!obj.has(key)) return BigDecimal(fallback)
-        val valueStr = obj.optString(key, null)
-        if (!valueStr.isNullOrBlank() && valueStr != "null") {
-            try {
-                return BigDecimal(valueStr.trim())
-            } catch (_: Exception) {}
-        }
-        val doubleVal = obj.optDouble(key, 0.0)
+        if (!obj.has(key) || obj.isNull(key)) return BigDecimal(fallback)
         return try {
-            BigDecimal.valueOf(doubleVal)
-        } catch (_: Exception) {
-            BigDecimal(fallback)
+            when (val raw = obj.get(key)) {
+                is BigDecimal -> raw
+                is Number -> BigDecimal(raw.toString())
+                is String -> raw.trim().takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+                    ?.let { BigDecimal(it) }
+                    ?: BigDecimal(fallback)
+                else -> throw IllegalArgumentException("Unsupported financial value type for '$key': ${raw::class.java.name}")
+            }
+        } catch (e: NumberFormatException) {
+            // A present but malformed value must not be rendered/restored as zero.
+            throw IllegalArgumentException("Invalid financial value for '$key'", e)
         }
     }
 

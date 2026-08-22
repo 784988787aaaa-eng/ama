@@ -134,13 +134,25 @@ object MzdBackupSerializer {
                 val obj = custArr.getJSONObject(i)
                 val cId = obj.optString("id", obj.optString("customer_id", ""))
 
-                var determinedInitialType = obj.optString("initial_type", obj.optString("initialType", TransactionType.OWED_BY_THEM.value))
-                val txTypesForCust = customerIdToTxTypes[cId]
-                if (txTypesForCust != null && txTypesForCust.isNotEmpty()) {
-                    if (txTypesForCust.contains(TransactionType.OWED_TO_THEM.value) || txTypesForCust.contains(TransactionType.PAYMENT_TO_THEM.value)) {
-                        determinedInitialType = TransactionType.OWED_TO_THEM.value
-                    } else if (txTypesForCust.contains(TransactionType.OWED_BY_THEM.value) || txTypesForCust.contains(TransactionType.PAYMENT_BY_THEM.value)) {
-                        determinedInitialType = TransactionType.OWED_BY_THEM.value
+                // Preserve the explicit persisted initial type when the backup contains it.
+                // Derive it from transaction history only for legacy backups that omitted the field;
+                // otherwise a valid backup could be silently rewritten during restore and fail
+                // logical zero-diff expectations.
+                val explicitInitialType = when {
+                    obj.has("initial_type") && !obj.isNull("initial_type") -> obj.optString("initial_type", "").trim()
+                    obj.has("initialType") && !obj.isNull("initialType") -> obj.optString("initialType", "").trim()
+                    else -> ""
+                }
+                val determinedInitialType = if (explicitInitialType.isNotEmpty()) {
+                    explicitInitialType
+                } else {
+                    val txTypesForCust = customerIdToTxTypes[cId]
+                    when {
+                        txTypesForCust?.any { it == TransactionType.OWED_TO_THEM.value || it == TransactionType.PAYMENT_TO_THEM.value } == true ->
+                            TransactionType.OWED_TO_THEM.value
+                        txTypesForCust?.any { it == TransactionType.OWED_BY_THEM.value || it == TransactionType.PAYMENT_BY_THEM.value } == true ->
+                            TransactionType.OWED_BY_THEM.value
+                        else -> TransactionType.OWED_BY_THEM.value
                     }
                 }
 
