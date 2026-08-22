@@ -15,9 +15,12 @@ data class CurrencyPair(
     val isValid: Boolean
         get() = rate.compareTo(BigDecimal.ZERO) > 0
 
-    /** Returns the directed rate without manufacturing a fallback value. */
     val safeRate: BigDecimal
-        get() = rate.setScale(8, RoundingMode.HALF_EVEN)
+        get() = if (rate.compareTo(BigDecimal.ZERO) > 0) {
+            rate.setScale(4, RoundingMode.HALF_EVEN)
+        } else {
+            BigDecimal.ONE.setScale(4, RoundingMode.HALF_EVEN)
+        }
 
     val isSelfPair: Boolean
         get() = baseCurrency.trim().equals(targetCurrency.trim(), ignoreCase = true)

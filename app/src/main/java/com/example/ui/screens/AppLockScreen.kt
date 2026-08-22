@@ -129,7 +129,7 @@ fun AppLockScreen(
                         val isMatch = withContext(Dispatchers.Default) {
                             try {
                                 val hashed = HashUtils.hashString(String(passChars))
-                                HashUtils.secureEquals(hashed, currentPasscodeHash)
+                                DatabaseSecurityGuard.secureEqual(hashed, currentPasscodeHash)
                             } finally {
                                 HashUtils.wipeCharArray(passChars)
                             }
@@ -170,7 +170,7 @@ fun AppLockScreen(
             val isCorrect = withContext(Dispatchers.Default) {
                 try {
                     val hashed = HashUtils.hashString(String(recoveryChars))
-                    HashUtils.secureEquals(hashed, settings.recoveryPhraseHash)
+                    DatabaseSecurityGuard.secureEqual(hashed, settings.recoveryPhraseHash)
                 } finally {
                     HashUtils.wipeCharArray(recoveryChars)
                 }

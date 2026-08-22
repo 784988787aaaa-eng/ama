@@ -170,7 +170,7 @@ fun AddCustomerTypeAndCurrencySelector(
                             if (nextValue) {
                                 val hasStoredRate = ExchangeRateHelper.hasRate(exchangeRatesJson, currencySymbol, selectedTransactionCurrency)
                                 val currentRateVal = ExchangeRateHelper.getRate(exchangeRatesJson, currencySymbol, selectedTransactionCurrency)
-                                if (!hasStoredRate) {
+                                if (!hasStoredRate || currentRateVal == 1.0) {
                                     onRequestRateSetup("")
                                 }
                             }

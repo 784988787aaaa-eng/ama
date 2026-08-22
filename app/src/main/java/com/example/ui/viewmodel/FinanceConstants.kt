@@ -19,3 +19,11 @@ object FinanceConstants {
     const val FREQ_WEEKLY = "WEEKLY"
     const val FREQ_MONTHLY = "MONTHLY"
 }
+
+enum class HabayebTransactionType {
+    OWED_BY_THEM,
+    PAYMENT_BY_THEM,
+    OWED_TO_THEM,
+    PAYMENT_TO_THEM
+}
+

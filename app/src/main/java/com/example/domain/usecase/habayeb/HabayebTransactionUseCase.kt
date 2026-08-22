@@ -19,13 +19,6 @@ import java.util.UUID
 import androidx.room.withTransaction
 import com.example.data.local.AppDatabase
 
-data class HistoricalRevalueResult(
-    val updatedCount: Int,
-    val skippedCount: Int,
-    val failed: Boolean = false,
-    val errorMessage: String? = null
-)
-
 class HabayebTransactionUseCase(
     private val application: Application,
     private val repository: FinanceRepository,
@@ -195,13 +188,10 @@ class HabayebTransactionUseCase(
                     val pair = com.example.domain.model.CurrencyPair(
                         baseCurrency = defaultCurrency,
                         targetCurrency = txCurrency,
-                        rate = newRate
+                        rate = if (newRate <= BigDecimal.ZERO) BigDecimal.ONE else newRate
                     )
 
                     val isSelfConversion = pair.isSelfPair
-                    if (!isSelfConversion && !pair.isValid) {
-                        throw IllegalArgumentException("Exchange rate must be greater than zero")
-                    }
                     val finalRate = if (isSelfConversion) BigDecimal.ONE else pair.safeRate
                     val finalCalculateRate = if (isSelfConversion) false else calculateRate
 
@@ -244,15 +234,12 @@ class HabayebTransactionUseCase(
         baseCurrencyCode: String,
         targetCurrencyCode: String,
         newRate: BigDecimal
-    ): HistoricalRevalueResult = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO) {
         try {
             val db = AppDatabase.getDatabase(application)
             db.withTransaction {
                 val transactions = repository.getAllTransactionsDirect()
-                require(newRate > BigDecimal.ZERO) { "Exchange rate must be greater than zero" }
-                val finalRate = newRate.setScale(8, java.math.RoundingMode.HALF_EVEN)
-                var updatedCount = 0
-                var skippedCount = 0
+                val finalRate = if (newRate <= BigDecimal.ZERO) BigDecimal.ONE else newRate
 
                 val normTargetCurrency = CurrencyConfig.getBySymbol(targetCurrencyCode)?.symbol ?: targetCurrencyCode
                 val normBaseCurrency = CurrencyConfig.getBySymbol(baseCurrencyCode)?.symbol ?: baseCurrencyCode
@@ -289,22 +276,12 @@ class HabayebTransactionUseCase(
                             baseCurrencyCode = baseCurrencyCode
                         )
                         repository.insertHabayebTransaction(updatedTx)
-                        updatedCount++
-                    } else {
-                        skippedCount++
                     }
                 }
-                HistoricalRevalueResult(updatedCount = updatedCount, skippedCount = skippedCount)
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "Error revaluing historical transactions", e)
-            HistoricalRevalueResult(
-                updatedCount = 0,
-                skippedCount = 0,
-                failed = true,
-                errorMessage = e.message
-            )
         }
     }
 

@@ -33,3 +33,34 @@ data class CustomersUiState(
     val totalOwedToThem: BigDecimal = BigDecimal.ZERO,
     val isLoading: Boolean = false
 )
+
+@Immutable
+data class CustomerBalancesPojo(
+    val customerId: String,
+    val customerName: String,
+    val customerPhone: String,
+    val customerNotes: String,
+    val customerCreatedAt: Long,
+    val customerInitialType: String,
+    val totalTransactions: Int,
+    val netDebt: Double,
+    val lastTxTime: Long,
+    val hasForeign: Int
+) {
+    fun toEntity() = HabayebCustomer(
+        id = customerId,
+        name = customerName,
+        phone = customerPhone,
+        notes = customerNotes,
+        createdAt = customerCreatedAt,
+        initialType = customerInitialType
+    )
+}
+
+@Immutable
+data class CustomerCurrencyBalancePojo(
+    val customerId: String,
+    val currencyCode: String,
+    val netBalance: java.math.BigDecimal
+)
+
