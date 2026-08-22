@@ -13,20 +13,11 @@ import java.security.MessageDigest
 object GoogleAuthConfig {
     private const val TAG = "GoogleAuthConfig"
 
-    // Credentials are supplied only through build-time configuration (.env / CI secrets).
-    // Never place OAuth credential values in this source file.
-    /** OAuth client identifier injected at build time from the environment/.env file. */
-    val WEB_CLIENT_ID: String
-        get() = BuildConfig.GOOGLE_CLIENT_ID.trim()
-
-    /**
-     * OAuth client secret injected at build time.
-     * Never hard-code this value in source control and never log/return it to UI.
-     * Note: an Android APK cannot keep a client secret truly secret; this preserves
-     * the current OAuth flow while removing the credential from the repository.
-     */
-    val CLIENT_SECRET: String
-        get() = BuildConfig.GOOGLE_CLIENT_SECRET.trim()
+    // ==========================================
+    // ⚠️ أدخل معرف العميل هنا (WEB_CLIENT_ID) يدوياً
+    // مثال: "1234567890-abcdefg.apps.googleusercontent.com"
+    // ==========================================
+    val WEB_CLIENT_ID = BuildConfig.GOOGLE_CLIENT_ID
 
     /**
      * وظيفة تحقق صارمة تتأكد من أن معرف العميل تم إدخاله بالتنسيق الصحيح والكامل الخاص بجوجل.
@@ -51,20 +42,8 @@ object GoogleAuthConfig {
             return false
         }
         
-        Log.d(TAG, "✅ [GOOGLE_AUTH_SUCCESS] Google WEB_CLIENT_ID is valid and configured")
+        Log.d(TAG, "✅ [GOOGLE_AUTH_SUCCESS] Google WEB_CLIENT_ID is valid and configured: '$trimmed'")
         return true
-    }
-
-    /**
-     * Validates the complete OAuth configuration without ever logging the secret.
-     */
-    fun validateOAuthConfiguration(): Boolean {
-        val clientIdValid = validateClientId()
-        val secretPresent = CLIENT_SECRET.isNotEmpty()
-        if (!secretPresent) {
-            Log.e(TAG, "❌ [GOOGLE_AUTH_ERROR] GOOGLE_CLIENT_SECRET is not configured")
-        }
-        return clientIdValid && secretPresent
     }
 
     /**

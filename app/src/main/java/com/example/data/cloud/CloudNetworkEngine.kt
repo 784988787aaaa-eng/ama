@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
-import com.example.GoogleAuthConfig
+import com.example.BuildConfig
 import com.example.data.serialization.BackupPayloadSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -82,12 +82,10 @@ class CloudNetworkEngine(private val context: Context) {
 
     // Credentials Resolvers
     val clientId: String
-        get() = sharedPrefs.getString(KEY_CLIENT_ID_OVERRIDE, null)?.takeIf { it.isNotEmpty() }
-            ?: GoogleAuthConfig.WEB_CLIENT_ID
+        get() = sharedPrefs.getString(KEY_CLIENT_ID_OVERRIDE, null)?.takeIf { it.isNotEmpty() } ?: BuildConfig.GOOGLE_CLIENT_ID
 
     val clientSecret: String
-        get() = sharedPrefs.getString(KEY_CLIENT_SECRET_OVERRIDE, null)?.takeIf { it.isNotEmpty() }
-            ?: GoogleAuthConfig.CLIENT_SECRET
+        get() = sharedPrefs.getString(KEY_CLIENT_SECRET_OVERRIDE, null)?.takeIf { it.isNotEmpty() } ?: BuildConfig.GOOGLE_CLIENT_SECRET
 
     // Zero-Diff Smart Deduplication Audit
     fun getStoredPayloadHash(): String? = sharedPrefs.getString(KEY_LAST_UPLOADED_HASH, null)

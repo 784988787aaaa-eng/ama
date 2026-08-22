@@ -88,19 +88,13 @@ data class RecurringConfig(
 
             fun parseBD(key: String, defaultVal: String): BigDecimal {
                 return try {
-                    if (!obj.has(key) || obj.isNull(key)) {
+                    if (obj.has(key)) BigDecimal(obj.getString(key)) else BigDecimal(defaultVal)
+                } catch (e: Exception) {
+                    try {
+                        BigDecimal(obj.optDouble(key, defaultVal.toDouble()).toString())
+                    } catch (ex: Exception) {
                         BigDecimal(defaultVal)
-                    } else {
-                        val raw = obj.get(key)
-                        when (raw) {
-                            is BigDecimal -> raw
-                            is Number -> BigDecimal(raw.toString())
-                            is String -> BigDecimal(raw.trim())
-                            else -> BigDecimal(defaultVal)
-                        }
                     }
-                } catch (_: Exception) {
-                    BigDecimal(defaultVal)
                 }
             }
 

@@ -130,7 +130,7 @@ fun ExchangeRateModifyDialog(
                                     Button(
                                         onClick = {
                                             val storedRate = getStoredRateForCurrency(txCurrency)
-                                            if (hasStoredRateForCurrency(txCurrency)) {
+                                            if (hasStoredRateForCurrency(txCurrency) && storedRate != 1.0) {
                                                 onConfirmRateSetup(txCurrency, storedRate)
                                             } else {
                                                 setupOverlayCurrency = txCurrency

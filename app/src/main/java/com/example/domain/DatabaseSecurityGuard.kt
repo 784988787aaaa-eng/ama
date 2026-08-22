@@ -15,6 +15,20 @@ object DatabaseSecurityGuard {
     private val SQLITE_HEADER_BYTES = "SQLite format 3".toByteArray(Charsets.US_ASCII)
 
     /**
+     * Prevents timing attacks on PIN/Passcode hashes using constant-time comparison.
+     */
+    fun secureEqual(a: String?, b: String?): Boolean {
+        if (a == null || b == null) return false
+        if (a.length != b.length) return false
+
+        var result = 0
+        for (i in 0 until a.length) {
+            result = result or (a[i].code xor b[i].code)
+        }
+        return result == 0
+    }
+
+    /**
      * Inspects SQLite file headers to guarantee integrity against manual tampering
      */
     fun verifyDatabaseIntegrity(context: Context, databaseName: String): Boolean {

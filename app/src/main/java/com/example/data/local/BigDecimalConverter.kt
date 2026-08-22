@@ -7,11 +7,12 @@ class BigDecimalConverter {
     @TypeConverter
     fun fromString(value: String?): BigDecimal? {
         if (value.isNullOrBlank()) return null
-        val cleaned = cleanNumberString(value)
-        if (cleaned.isEmpty()) {
-            throw IllegalArgumentException("Invalid BigDecimal value: $value")
+        return try {
+            val cleaned = cleanNumberString(value)
+            if (cleaned.isEmpty()) BigDecimal.ZERO else BigDecimal(cleaned)
+        } catch (_: Exception) {
+            BigDecimal.ZERO
         }
-        return BigDecimal(cleaned)
     }
 
     @TypeConverter
@@ -19,19 +20,12 @@ class BigDecimalConverter {
 
     @TypeConverter
     fun fromDouble(value: Double?): BigDecimal? = value?.let {
-        if (!it.isFinite()) {
-            throw IllegalArgumentException("Invalid BigDecimal Double value: $it")
-        }
-        BigDecimal.valueOf(it)
+        runCatching { BigDecimal.valueOf(it) }.getOrDefault(BigDecimal.ZERO)
     }
 
     @TypeConverter
     fun toDouble(value: BigDecimal?): Double? = value?.let {
-        val converted = it.toDouble()
-        if (!converted.isFinite()) {
-            throw IllegalArgumentException("BigDecimal cannot be represented safely as Double: $it")
-        }
-        converted
+        runCatching { it.toDouble() }.getOrDefault(0.0)
     }
 
     private fun cleanNumberString(input: String): String {
